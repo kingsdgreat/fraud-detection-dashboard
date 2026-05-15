@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { use } from 'react';
 import { CaseDetailView } from '@/components/case-detail-view';
 
