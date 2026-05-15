@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import React, { useState, useCallback, useRef } from 'react';
 import {
   Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle,

@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { KpiCards } from '@/components/kpi-cards';
 import { ChannelChart, CompanyChart, RiskDistributionChart, ThirdPartyVsInternalChart } from '@/components/overview-charts';
 import { GeneratorControls } from '@/components/generator-controls';

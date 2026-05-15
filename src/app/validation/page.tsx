@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { ValidationView } from '@/components/validation-view';
 
 export default function ValidationPage() {

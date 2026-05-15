@@ -20,11 +20,15 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   }
 
   // Production mode: real database + auth
+  // DataProvider is included so demo pages don't crash during build-time prerendering.
+  // In production, middleware redirects users to /prod/* routes before they ever see demo pages.
   return (
     <SessionProvider>
-      <ProductionDataProvider>
-        {children}
-      </ProductionDataProvider>
+      <DataProvider>
+        <ProductionDataProvider>
+          {children}
+        </ProductionDataProvider>
+      </DataProvider>
     </SessionProvider>
   );
 }

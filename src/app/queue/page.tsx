@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { ReviewQueueTable } from '@/components/review-queue-table';
 
 export default function QueuePage() {
