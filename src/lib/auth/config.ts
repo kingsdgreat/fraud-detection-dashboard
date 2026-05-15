@@ -29,33 +29,56 @@ export const authConfig: NextAuthConfig = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null;
-
-        const db = getDb();
-        const email = credentials.email as string;
-
-        // Look up user by email
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, email))
-          .limit(1);
-
-        if (!user || !user.isActive) return null;
-
-        // In development, accept any password for seeded users
-        // In production, replace with proper password hash verification or SSO
-        if (process.env.NODE_ENV === 'development' || process.env.AUTH_DEV_MODE === 'true') {
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-          };
+        if (!credentials?.email) {
+          console.log('[auth] No email provided');
+          return null;
         }
 
-        // Production: This should be replaced with SSO or proper auth
-        return null;
+        try {
+          const db = getDb();
+          const email = credentials.email as string;
+          console.log('[auth] Looking up user:', email);
+
+          // Look up user by email
+          const [user] = await db
+            .select()
+            .from(users)
+            .where(eq(users.email, email))
+            .limit(1);
+
+          if (!user) {
+            console.log('[auth] User not found:', email);
+            return null;
+          }
+
+          if (!user.isActive) {
+            console.log('[auth] User inactive:', email);
+            return null;
+          }
+
+          console.log('[auth] User found:', user.email, 'role:', user.role);
+          console.log('[auth] NODE_ENV:', process.env.NODE_ENV);
+          console.log('[auth] AUTH_DEV_MODE:', process.env.AUTH_DEV_MODE);
+
+          // In development, accept any password for seeded users
+          // AUTH_DEV_MODE=true allows this in production too (for staging/testing)
+          if (process.env.NODE_ENV === 'development' || process.env.AUTH_DEV_MODE === 'true') {
+            console.log('[auth] Dev mode auth — granting access');
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role,
+            };
+          }
+
+          console.log('[auth] Production mode — no dev auth, returning null');
+          // Production: This should be replaced with SSO or proper auth
+          return null;
+        } catch (err) {
+          console.error('[auth] Error in authorize:', err);
+          return null;
+        }
       },
     }),
     // Add production providers here:
@@ -90,7 +113,7 @@ export const authConfig: NextAuthConfig = {
 
       // Auth pages: redirect to dashboard if already logged in
       if (isAuthPage) {
-        if (isLoggedIn) return Response.redirect(new URL('/', nextUrl));
+        if (isLoggedIn) return Response.redirect(new URL('/prod', nextUrl));
         return true;
       }
 

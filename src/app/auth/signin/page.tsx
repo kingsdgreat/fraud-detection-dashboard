@@ -19,22 +19,45 @@ export default function SignInPage() {
 
 function SignInForm() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
-  const error = searchParams.get('error');
+  const callbackUrl = searchParams.get('callbackUrl') || '/prod';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(
+    searchParams.get('error') === 'CredentialsSignin'
+      ? 'Invalid email or password'
+      : searchParams.get('error')
+        ? 'An error occurred. Please try again.'
+        : null
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await signIn('credentials', {
-      email,
-      password,
-      callbackUrl,
-    });
-    setLoading(false);
+    setError(null);
+
+    try {
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError('Invalid email or password');
+        setLoading(false);
+      } else if (result?.ok) {
+        // Successful sign-in — redirect to dashboard
+        window.location.href = callbackUrl;
+      } else {
+        setError('Sign-in failed. Please try again.');
+        setLoading(false);
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+      setLoading(false);
+    }
   }
 
   return (
@@ -51,11 +74,7 @@ function SignInForm() {
         {error && (
           <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 rounded-lg p-3 mb-6">
             <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0" />
-            <p className="text-sm text-red-300">
-              {error === 'CredentialsSignin'
-                ? 'Invalid email or password'
-                : 'An error occurred. Please try again.'}
-            </p>
+            <p className="text-sm text-red-300">{error}</p>
           </div>
         )}
 
