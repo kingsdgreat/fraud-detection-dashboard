@@ -12,9 +12,14 @@ import { Sidebar } from '@/components/sidebar';
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // Auth pages and prod pages get a clean layout (no demo sidebar)
-  if (pathname.startsWith('/auth') || pathname.startsWith('/prod')) {
-    return <>{children}</>;
+  // Auth pages: full-screen, no sidebar
+  if (pathname.startsWith('/auth')) {
+    return <div className="flex-1">{children}</div>;
+  }
+
+  // Prod pages: they have their own layout with sidebar
+  if (pathname.startsWith('/prod')) {
+    return <div className="flex-1">{children}</div>;
   }
 
   // Demo pages: show sidebar + main content area
