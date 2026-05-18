@@ -38,24 +38,29 @@ function SignInForm() {
     setError(null);
 
     try {
+      console.log('[signin] Calling signIn with email:', email);
       const result = await signIn('credentials', {
         email,
         password,
         redirect: false,
       });
+      console.log('[signin] Result:', JSON.stringify(result));
 
       if (result?.error) {
-        setError('Invalid email or password');
+        console.log('[signin] Error returned:', result.error);
+        setError(`Sign-in error: ${result.error}`);
         setLoading(false);
       } else if (result?.ok) {
-        // Successful sign-in — redirect to dashboard
+        console.log('[signin] Success! Redirecting to:', callbackUrl);
         window.location.href = callbackUrl;
       } else {
+        console.log('[signin] Unexpected result:', result);
         setError('Sign-in failed. Please try again.');
         setLoading(false);
       }
-    } catch (err) {
-      setError('Network error. Please try again.');
+    } catch (err: any) {
+      console.error('[signin] Exception:', err);
+      setError(`Network error: ${err.message}`);
       setLoading(false);
     }
   }

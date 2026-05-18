@@ -58,8 +58,11 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // For page routes: check for NextAuth session cookie
-  const sessionToken = request.cookies.get('next-auth.session-token')
+  // For page routes: check for session cookie
+  // Auth.js v5 uses 'authjs.session-token', NextAuth v4 used 'next-auth.session-token'
+  const sessionToken = request.cookies.get('authjs.session-token')
+    || request.cookies.get('__Secure-authjs.session-token')
+    || request.cookies.get('next-auth.session-token')
     || request.cookies.get('__Secure-next-auth.session-token');
 
   if (!sessionToken) {

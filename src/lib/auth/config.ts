@@ -1,6 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { getDb } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -8,13 +7,20 @@ import { eq } from 'drizzle-orm';
 /**
  * NextAuth.js v5 configuration.
  *
- * In development, uses a Credentials provider for easy testing.
- * In production, add SSO providers (Azure AD, Google Workspace, etc.)
+ * Uses JWT sessions (no database adapter needed for Credentials provider).
+ * The DrizzleAdapter was removed because it conflicts with the Credentials
+ * provider in NextAuth v5 — the adapter tries to manage user records
+ * but Credentials bypasses that flow.
  *
- * This module is only loaded when DATABASE_URL is configured (production mode).
+ * If you add OAuth providers (Azure AD, Google, etc.), re-add the adapter:
+ *   import { DrizzleAdapter } from '@auth/drizzle-adapter';
+ *   adapter: DrizzleAdapter(getDb()),
  */
 export const authConfig: NextAuthConfig = {
-  adapter: DrizzleAdapter(getDb()),
+  // No adapter — Credentials + JWT doesn't need one
+  // Secure cookies require HTTPS — disable when NEXTAUTH_URL is http://
+  // On Vercel (no NEXTAUTH_URL set), defaults to secure
+  useSecureCookies: !process.env.NEXTAUTH_URL?.startsWith('http://'),
   session: { strategy: 'jwt' },
   pages: {
     signIn: '/auth/signin',

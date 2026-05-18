@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
+export const dynamic = 'force-dynamic';
 import {
   LayoutDashboard, ListChecks, Upload, Settings, Shield,
   LogOut, User, AlertCircle, ChevronDown,
@@ -19,7 +20,8 @@ const navigation = [
 
 export default function ProductionLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const sessionResult = useSession() || {};
+  const session = (sessionResult as any).data;
   const [slaOverdue, setSlaOverdue] = useState(0);
 
   // Fetch SLA overdue count for badge
