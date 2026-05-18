@@ -4,7 +4,8 @@ import { orders } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { withAuth } from '../middleware';
 import { scoreOneOrder, DEFAULT_ASSUMPTIONS } from '@/lib/engine/scorer';
-import type { Order, Channel } from '@/lib/types';
+import { dbOrderToEngineOrder } from '@/lib/engine/pipeline';
+import type { Order } from '@/lib/types';
 
 /**
  * POST /api/v1/score/single — Score a single order against the order pool
@@ -64,70 +65,4 @@ export const POST = withAuth(async (req, user) => {
   );
 }, 'analyst');
 
-/**
- * Map a DB channel string to the engine's Channel enum value.
- * Falls back to 'internal_online' if unknown.
- */
-function mapChannel(channel: string | null): Channel {
-  const validChannels: Channel[] = [
-    'third_party_door_to_door',
-    'third_party_retail',
-    'third_party_telemarketing',
-    'internal_online',
-    'internal_call_center',
-    'retention',
-  ];
-  if (channel && validChannels.includes(channel as Channel)) {
-    return channel as Channel;
-  }
-  return 'internal_online';
-}
-
-/**
- * Convert a database order row to the engine's Order type.
- *
- * The engine Order type has many fields that don't exist in the DB
- * (normalizedName, normalizedAddress, identitySignals, commission, etc.)
- * We synthesize them from available DB columns.
- */
-function dbOrderToEngineOrder(dbOrder: any): Order {
-  const name = dbOrder.customerName || '';
-  const address = dbOrder.address || '';
-  const dateStr = dbOrder.orderDate instanceof Date
-    ? dbOrder.orderDate.toISOString().split('T')[0]
-    : String(dbOrder.orderDate);
-
-  return {
-    id: dbOrder.externalId || dbOrder.id,
-    orderDate: dateStr,
-    customerName: name,
-    normalizedName: name.toUpperCase().trim(),
-    address: address,
-    normalizedAddress: address.toUpperCase().trim(),
-    city: dbOrder.city || '',
-    state: dbOrder.state || '',
-    zip: dbOrder.zip || '',
-    region: dbOrder.region || '',
-    channel: mapChannel(dbOrder.channel),
-    agentCode: dbOrder.agentId || '',
-    companyCode: '',
-    companyName: '',
-    accountNumber: dbOrder.accountNumber || '',
-    priorAccountNumber: undefined,
-    disconnectDate: undefined,
-    disconnectReason: dbOrder.disconnectReason || undefined,
-    delinquentBalance: dbOrder.delinquentBalance
-      ? parseFloat(dbOrder.delinquentBalance)
-      : undefined,
-    identitySignals: {
-      phoneHash: dbOrder.phoneHash || undefined,
-      emailHash: dbOrder.emailHash || undefined,
-      paymentMethodHash: dbOrder.paymentMethodHash || undefined,
-      ssnLast4Hash: dbOrder.ssnLast4Hash || undefined,
-      equipmentSerialHistory: dbOrder.equipmentId ? [dbOrder.equipmentId] : undefined,
-    },
-    commissionAmount: 0,
-    monthlyRecurring: 0,
-    _isFraud: false, // Unknown for real data
-  };
-}
+// dbOrderToEngineOrder and mapChannel are imported from @/lib/engine/pipeline

@@ -4,6 +4,7 @@ import { orders, ingestionBatches } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { withAuth } from '../../middleware';
 import { z } from 'zod';
+import { scoreBatch } from '@/lib/engine/pipeline';
 
 // Expected CSV column headers (case-insensitive mapping)
 const COLUMN_MAP: Record<string, string> = {
@@ -203,7 +204,16 @@ export const POST = withAuth(async (req, user) => {
     completedAt: new Date(),
   }).where(eq(ingestionBatches.id, batch.id));
 
-  // TODO: Trigger scoring job for new orders
+  // Score all new orders and create cases
+  let scoringResult = { casesCreated: 0, errors: [] as string[] };
+  if (processedCount > 0) {
+    try {
+      scoringResult = await scoreBatch(batch.id);
+    } catch (err: any) {
+      console.error('[upload] Scoring pipeline error:', err);
+      scoringResult.errors.push(`Scoring pipeline error: ${err.message}`);
+    }
+  }
 
   return NextResponse.json({
     batchId: batch.id,
@@ -211,7 +221,9 @@ export const POST = withAuth(async (req, user) => {
     totalRows: lines.length - 1,
     processed: processedCount,
     failed: failedCount,
-    errors: errors.slice(0, 50), // Limit error output
+    casesCreated: scoringResult.casesCreated,
+    scoringErrors: scoringResult.errors.slice(0, 20),
+    errors: errors.slice(0, 50),
     status: finalStatus,
   }, { status: 201 });
 }, 'analyst');
