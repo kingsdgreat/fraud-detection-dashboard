@@ -1,0 +1,21 @@
+external_id,order_date,order_type,customer_name,address,city,state,zip,phone_hash,email_hash,payment_method_hash,ssn_last4_hash,equipment_id,channel,agent_id,region,promo_code,account_number,disconnect_reason,delinquent_balance
+ORD-2024-0001,2024-04-15,connect,Robert Martinez,4521 Oak St,Charlotte,NC,28202,ph_rm_001,em_rm_001,pm_rm_001,ss_rm_01,EQ887712,third_party_door_to_door,PDS-007,Southeast,NEW49,ACCT900000001,Non-payment,425.00
+ORD-2024-0002,2024-04-08,disconnect,Robert Martinez,4521 Oak St,Charlotte,NC,28202,ph_rm_001,em_rm_001,pm_rm_001,ss_rm_01,EQ887712,internal_call_center,INT-000,Southeast,,ACCT800000055,Non-payment,425.00
+ORD-2024-0003,2024-05-20,connect,Sarah Thompson,782 Birch Rd APT 4,Columbus,OH,43215,ph_st_001,em_st_001,pm_st_001,,EQ551234,internal_online,ONL-045,Midwest,TRIPLE59,,
+ORD-2024-0004,2024-04-18,connect,Maria Rodriguez,269 24th St,Oakland,CA,94612,ph_jr_001,em_mr_001,pm_jr_001,,EQ662345,third_party_door_to_door,PDS-007,West,NEW49,ACCT900000099,,
+ORD-2024-0005,2024-04-10,disconnect,James Rodriguez,269 24th St,Oakland,CA,94612,ph_jr_001,em_jr_001,pm_jr_001,ss_jr_01,EQ662345,internal_call_center,INT-000,West,,ACCT800000066,Non-payment,310.00
+ORD-2024-0006,2024-03-22,connect,Emily Chen,1100 Market St APT 12,San Francisco,CA,94103,ph_ec_001,em_ec_001,pm_ec_001,,EQ773456,internal_online,ONL-012,West,BUNDLE79,,
+ORD-2024-0007,2024-05-01,connect,David Wilson,335 Elm Ave,Raleigh,NC,27601,ph_dw_001,em_dw_001,pm_dw_001,,EQ884567,third_party_retail,RTL-023,Southeast,NEW49,ACCT900000003,,
+ORD-2024-0008,2024-04-25,connect,Jennifer Lopez,890 Pine Dr,Atlanta,GA,30301,ph_jl_001,em_jl_001,pm_jl_001,ss_jl_01,EQ995678,third_party_door_to_door,PDS-012,Southeast,NEW49,ACCT900000004,Non-payment,275.50
+ORD-2024-0009,2024-04-20,disconnect,Jennifer Lopez,890 Pine Dr,Atlanta,GA,30301,ph_jl_001,em_jl_001,pm_jl_001,ss_jl_01,EQ995678,internal_call_center,INT-000,Southeast,,ACCT800000088,Non-payment,275.50
+ORD-2024-0010,2024-05-05,connect,Michael Brown,452 Maple Ln,Nashville,TN,37201,ph_mb_001,em_mb_001,pm_mb_001,,EQ106789,internal_call_center,INT-034,Southeast,TRIPLE59,ACCT900000005,,
+ORD-2024-0011,2024-04-28,connect,Lisa Anderson,2200 Broadway,New York,NY,10024,ph_la_001,em_la_001,pm_la_001,,EQ217890,internal_online,ONL-067,Northeast,BUNDLE79,,
+ORD-2024-0012,2024-05-10,connect,Carlos Ramirez,1450 Central Ave,Dallas,TX,75201,ph_cr_001,em_cr_001,pm_cr_001,,EQ328901,third_party_telemarketing,TM-009,Southwest,NEW49,ACCT900000006,,
+ORD-2024-0013,2024-05-12,connect,Kevin White,675 Sunset Blvd,Miami,FL,33101,ph_kw_001,em_kw_001,pm_kw_001,ss_kw_01,EQ439012,third_party_door_to_door,PDS-007,Southeast,NEW49,ACCT900000007,Non-payment,520.00
+ORD-2024-0014,2024-05-05,disconnect,Kevin White,675 Sunset Blvd,Miami,FL,33101,ph_kw_001,em_kw_001,pm_kw_001,ss_kw_01,EQ439012,internal_call_center,INT-000,Southeast,,ACCT800000099,Non-payment,520.00
+ORD-2024-0015,2024-05-15,connect,Amanda Taylor,3300 Lake Shore Dr,Chicago,IL,60614,ph_at_001,em_at_001,pm_at_001,,EQ540123,internal_online,ONL-089,Midwest,TRIPLE59,,
+ORD-2024-0016,2024-04-30,connect,Thomas Jackson,1820 Peachtree St,Atlanta,GA,30309,ph_jl_001,em_tj_001,pm_jl_001,,EQ651234,third_party_door_to_door,PDS-012,Southeast,NEW49,ACCT900000008,Non-payment,180.00
+ORD-2024-0017,2024-05-18,connect,Rachel Green,555 Park Ave,Boston,MA,02108,ph_rg_001,em_rg_001,pm_rg_001,,EQ762345,internal_call_center,INT-056,Northeast,BUNDLE79,,
+ORD-2024-0018,2024-05-22,connect,Jason Kim,1025 Cherry St,Denver,CO,80202,ph_jk_001,em_jk_001,pm_jk_001,,EQ873456,third_party_retail,RTL-041,West,NEW49,ACCT900000009,,
+ORD-2024-0019,2024-05-08,connect,Nicole Davis,4400 River Rd,Houston,TX,77002,ph_nd_001,em_nd_001,pm_nd_001,ss_nd_01,EQ984567,third_party_door_to_door,PDS-019,Southwest,NEW49,ACCT900000010,Customer request,0
+ORD-2024-0020,2024-05-25,connect,Brandon Lee,720 Ocean Blvd,San Diego,CA,92101,ph_bl_001,em_bl_001,pm_bl_001,,EQ095678,internal_online,ONL-023,West,TRIPLE59,,

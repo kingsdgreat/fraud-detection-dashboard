@@ -8,12 +8,13 @@ import { cn } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 import {
   LayoutDashboard, ListChecks, Upload, Settings, Shield,
-  LogOut, User, AlertCircle, ChevronDown,
+  LogOut, User, AlertCircle, ChevronDown, SearchCheck,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/prod', icon: LayoutDashboard },
   { name: 'Case Queue', href: '/prod/queue', icon: ListChecks, badge: true },
+  { name: 'Test Order', href: '/prod/test', icon: SearchCheck },
   { name: 'Data Ingestion', href: '/prod/ingest', icon: Upload },
   { name: 'Settings', href: '/prod/settings', icon: Settings },
 ];

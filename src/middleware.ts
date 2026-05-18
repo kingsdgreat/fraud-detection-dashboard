@@ -44,6 +44,7 @@ export function middleware(request: NextRequest) {
       '/': '/prod',
       '/queue': '/prod/queue',
       '/ingest': '/prod/ingest',
+      '/test': '/prod/test',
       '/settings': '/prod/settings',
     };
 
