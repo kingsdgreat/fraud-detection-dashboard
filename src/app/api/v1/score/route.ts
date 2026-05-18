@@ -51,8 +51,10 @@ export const POST = withAuth(async (req, user) => {
   }
 
   // If scoring an ad-hoc test order (must already be in full engine Order format)
+  // Optionally accepts companionOrders[] to simulate prior accounts in the scoring pool
   if (body.order) {
-    const result = scoreOneOrder(body.order as Order, [], DEFAULT_ASSUMPTIONS);
+    const pool: Order[] = Array.isArray(body.companionOrders) ? body.companionOrders : [];
+    const result = scoreOneOrder(body.order as Order, pool, DEFAULT_ASSUMPTIONS);
     return NextResponse.json(result);
   }
 

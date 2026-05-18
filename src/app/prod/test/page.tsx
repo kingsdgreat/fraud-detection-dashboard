@@ -182,6 +182,117 @@ const EXAMPLE_CLEAN: FormState = {
   equipmentSerials: '',
 };
 
+// ── Prior Account Simulation State ─────────────────────────────
+interface PriorAccountState {
+  enabled: boolean;
+  customerName: string;
+  sameAddress: boolean;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  disconnectDate: string;
+  disconnectReason: string;
+  accountNumber: string;
+  delinquentBalance: string;
+  samePhone: boolean;
+  samePayment: boolean;
+  sameEmail: boolean;
+  sameSsn: boolean;
+  sameEquipment: boolean;
+}
+
+const EMPTY_PRIOR: PriorAccountState = {
+  enabled: false,
+  customerName: '',
+  sameAddress: true,
+  address: '',
+  city: '',
+  state: '',
+  zip: '',
+  disconnectDate: '',
+  disconnectReason: 'Non-payment',
+  accountNumber: '',
+  delinquentBalance: '',
+  samePhone: true,
+  samePayment: true,
+  sameEmail: false,
+  sameSsn: false,
+  sameEquipment: false,
+};
+
+interface ExamplePreset {
+  form: FormState;
+  prior: PriorAccountState;
+}
+
+const PRESET_SUSPICIOUS: ExamplePreset = {
+  form: EXAMPLE_SUSPICIOUS,
+  prior: {
+    enabled: true,
+    customerName: 'Robert Martinez',
+    sameAddress: true,
+    address: '', city: '', state: '', zip: '',
+    disconnectDate: '2024-04-08',
+    disconnectReason: 'Non-payment',
+    accountNumber: 'ACCT800000055',
+    delinquentBalance: '425',
+    samePhone: true,
+    samePayment: true,
+    sameEmail: true,
+    sameSsn: true,
+    sameEquipment: true,
+  },
+};
+
+const PRESET_FAKE_NAME: ExamplePreset = {
+  form: {
+    ...EXAMPLE_SUSPICIOUS,
+    customerName: 'Maria Rodriguez',
+    address: '269 24th St',
+    city: 'Oakland',
+    state: 'CA',
+    zip: '94612',
+    region: 'West',
+    accountNumber: 'ACCT900000099',
+    priorAccountNumber: '',
+    disconnectDate: '',
+    disconnectReason: '',
+    delinquentBalance: '',
+  },
+  prior: {
+    enabled: true,
+    customerName: 'James Rodriguez',
+    sameAddress: true,
+    address: '', city: '', state: '', zip: '',
+    disconnectDate: '2024-04-10',
+    disconnectReason: 'Non-payment',
+    accountNumber: 'ACCT800000066',
+    delinquentBalance: '310',
+    samePhone: true,
+    samePayment: true,
+    sameEmail: false,
+    sameSsn: false,
+    sameEquipment: false,
+  },
+};
+
+const PRESET_CLEAN: ExamplePreset = {
+  form: EXAMPLE_CLEAN,
+  prior: { ...EMPTY_PRIOR },
+};
+
+// ── Shared Signal Toggle ───────────────────────────────────────
+function SignalToggle({ label, icon, checked, onChange }: { label: string; icon: React.ReactNode; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${checked ? 'bg-red-50 border border-red-200' : 'bg-gray-50 border border-gray-200'}`}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="rounded border-gray-300 text-red-600 focus:ring-red-500" />
+      <span className={checked ? 'text-red-600' : 'text-gray-400'}>{icon}</span>
+      <span className={`text-sm ${checked ? 'text-red-800 font-medium' : 'text-gray-600'}`}>{label}</span>
+    </label>
+  );
+}
+
 // ── Results Display ─────────────────────────────────────────────
 function ResultsPanel({ result }: { result: ScoredCase }) {
   const order = result.order;
@@ -494,12 +605,17 @@ function ResultsPanel({ result }: { result: ScoredCase }) {
 // ── Main Page ───────────────────────────────────────────────────
 export default function ProductionTestOrderPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [prior, setPrior] = useState<PriorAccountState>(EMPTY_PRIOR);
   const [result, setResult] = useState<ScoredCase | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const update = useCallback((field: keyof FormState, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const updatePrior = useCallback((field: keyof PriorAccountState, value: string | boolean) => {
+    setPrior(prev => ({ ...prev, [field]: value }));
   }, []);
 
   const validate = (): string[] => {
@@ -575,11 +691,52 @@ export default function ProductionTestOrderPage() {
         _legitEdgeCase: undefined,
       };
 
+      // Build companion prior account order if enabled
+      let companionOrders: Order[] | undefined;
+      if (prior.enabled && prior.customerName && prior.disconnectDate) {
+        const priorNameBase = hashCode(prior.customerName);
+        const priorAddr = prior.sameAddress
+          ? { address: form.address, normalizedAddress: normalizeAddress(form.address), city: form.city, state: form.state, zip: form.zip }
+          : { address: prior.address, normalizedAddress: normalizeAddress(prior.address), city: prior.city, state: prior.state, zip: prior.zip };
+
+        const companionOrder: Order = {
+          id: `PRIOR-${Date.now().toString(36).toUpperCase()}`,
+          orderDate: new Date(new Date(prior.disconnectDate).getTime() - 90 * 86400000).toISOString().split('T')[0],
+          customerName: prior.customerName,
+          normalizedName: normalizeName(prior.customerName),
+          ...priorAddr,
+          region: form.region,
+          channel: 'internal_call_center',
+          agentCode: 'INT-000',
+          companyCode: 'INT',
+          companyName: 'Spectrum Internal',
+          accountNumber: prior.accountNumber || `ACCT${Date.now() - 1}`,
+          disconnectDate: prior.disconnectDate,
+          disconnectReason: prior.disconnectReason || 'Non-payment',
+          daysSinceDisconnect: 0,
+          delinquentBalance: prior.delinquentBalance ? parseFloat(prior.delinquentBalance) : undefined,
+          commissionAmount: 0,
+          monthlyRecurring: 120,
+          identitySignals: {
+            phoneHash: prior.samePhone ? orderPhoneHash : `ph_${priorNameBase.slice(0, 8)}`,
+            emailHash: prior.sameEmail ? orderEmailHash : `em_${priorNameBase.slice(0, 8)}`,
+            paymentMethodHash: prior.samePayment ? orderPaymentHash : `pm_${priorNameBase.slice(0, 8)}`,
+            ssnLast4Hash: prior.sameSsn ? (form.ssnLast4Hash || `ss_${hashCode(form.customerName).slice(0, 6)}`) : `ss_${priorNameBase.slice(0, 6)}`,
+            equipmentSerialHistory: prior.sameEquipment ? orderEquipment : [`EQ${Date.now().toString().slice(-6)}X`],
+          },
+          _isFraud: false,
+          _isCompanion: true,
+          _archetype: undefined,
+          _legitEdgeCase: undefined,
+        };
+        companionOrders = [companionOrder];
+      }
+
       // Call the production scoring API
       const response = await fetch('/api/v1/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order }),
+        body: JSON.stringify({ order, companionOrders }),
       });
 
       if (!response.ok) {
@@ -598,12 +755,14 @@ export default function ProductionTestOrderPage() {
 
   const handleReset = () => {
     setForm(EMPTY_FORM);
+    setPrior(EMPTY_PRIOR);
     setResult(null);
     setErrors([]);
   };
 
-  const loadExample = (example: FormState) => {
-    setForm(example);
+  const loadPreset = (preset: ExamplePreset) => {
+    setForm(preset.form);
+    setPrior(preset.prior);
     setResult(null);
     setErrors([]);
   };
@@ -622,10 +781,13 @@ export default function ProductionTestOrderPage() {
       {/* Example Buttons */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-gray-500">Quick fill:</span>
-        <Button variant="outline" size="sm" onClick={() => loadExample(EXAMPLE_SUSPICIOUS)}>
+        <Button variant="outline" size="sm" onClick={() => loadPreset(PRESET_SUSPICIOUS)}>
           Suspicious Example
         </Button>
-        <Button variant="outline" size="sm" onClick={() => loadExample(EXAMPLE_CLEAN)}>
+        <Button variant="outline" size="sm" onClick={() => loadPreset(PRESET_FAKE_NAME)}>
+          Fake Name Example
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => loadPreset(PRESET_CLEAN)}>
           Clean Example
         </Button>
         <Button variant="ghost" size="sm" onClick={handleReset}>
@@ -783,6 +945,134 @@ export default function ProductionTestOrderPage() {
                     </Field>
                   </div>
                 </div>
+              </Section>
+
+              {/* ── Prior Account Simulation ─────────────────── */}
+              <Section
+                title="Prior Account Simulation"
+                description="Simulate a disconnected account to show how cross-referencing works"
+                defaultOpen={prior.enabled}
+              >
+                <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg mb-3">
+                  <AlertTriangle className="h-3 w-3 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-amber-800">
+                    This creates a simulated prior account in the scoring pool. Toggle the shared signals below to control which
+                    identity markers match between the old and new account — the engine will detect them automatically.
+                  </p>
+                </div>
+
+                <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={prior.enabled}
+                    onChange={e => updatePrior('enabled', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-800">Enable prior account simulation</span>
+                </label>
+
+                {prior.enabled && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <Field label="Prior Customer Name" required hint="Use a different name to test fake-name detection">
+                          <Input value={prior.customerName} onChange={e => updatePrior('customerName', e.target.value)} placeholder="e.g. James Rodriguez" />
+                        </Field>
+                      </div>
+                      <Field label="Disconnect Date" required>
+                        <Input type="date" value={prior.disconnectDate} onChange={e => updatePrior('disconnectDate', e.target.value)} />
+                      </Field>
+                      <Field label="Disconnect Reason">
+                        <select
+                          value={prior.disconnectReason}
+                          onChange={e => updatePrior('disconnectReason', e.target.value)}
+                          className="flex h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                        >
+                          {['Non-payment','Customer request','Seasonal','Moved','Service issue','Price'].map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Prior Account #">
+                        <Input value={prior.accountNumber} onChange={e => updatePrior('accountNumber', e.target.value)} placeholder="ACCT..." />
+                      </Field>
+                      <Field label="Delinquent Balance ($)">
+                        <Input type="number" value={prior.delinquentBalance} onChange={e => updatePrior('delinquentBalance', e.target.value)} placeholder="0" />
+                      </Field>
+                    </div>
+
+                    {/* Address */}
+                    <div className="border border-gray-200 rounded-lg p-3">
+                      <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={prior.sameAddress}
+                          onChange={e => updatePrior('sameAddress', e.target.checked)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-800">Same service address as new order</span>
+                      </label>
+                      {!prior.sameAddress && (
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                          <div className="col-span-2">
+                            <Field label="Prior Address">
+                              <Input value={prior.address} onChange={e => updatePrior('address', e.target.value)} placeholder="123 Main St" />
+                            </Field>
+                          </div>
+                          <Field label="City">
+                            <Input value={prior.city} onChange={e => updatePrior('city', e.target.value)} />
+                          </Field>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Field label="State">
+                              <Input value={prior.state} onChange={e => updatePrior('state', e.target.value)} maxLength={2} />
+                            </Field>
+                            <Field label="ZIP">
+                              <Input value={prior.zip} onChange={e => updatePrior('zip', e.target.value)} />
+                            </Field>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Shared Signal Toggles */}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Shared Signals</p>
+                      <p className="text-xs text-gray-500 mb-3">Check which identity markers the prior account shares with the new order. Each match adds evidence.</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <SignalToggle
+                          label="Same Phone"
+                          icon={<Phone className="h-3.5 w-3.5" />}
+                          checked={prior.samePhone}
+                          onChange={v => updatePrior('samePhone', v)}
+                        />
+                        <SignalToggle
+                          label="Same Payment Method"
+                          icon={<CreditCard className="h-3.5 w-3.5" />}
+                          checked={prior.samePayment}
+                          onChange={v => updatePrior('samePayment', v)}
+                        />
+                        <SignalToggle
+                          label="Same Email"
+                          icon={<Mail className="h-3.5 w-3.5" />}
+                          checked={prior.sameEmail}
+                          onChange={v => updatePrior('sameEmail', v)}
+                        />
+                        <SignalToggle
+                          label="Same SSN Last 4"
+                          icon={<Hash className="h-3.5 w-3.5" />}
+                          checked={prior.sameSsn}
+                          onChange={v => updatePrior('sameSsn', v)}
+                        />
+                        <SignalToggle
+                          label="Same Equipment"
+                          icon={<Package className="h-3.5 w-3.5" />}
+                          checked={prior.sameEquipment}
+                          onChange={v => updatePrior('sameEquipment', v)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </Section>
 
               <Button onClick={handleScore} className="w-full" size="lg" disabled={loading}>
