@@ -4,7 +4,7 @@ import { orders } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { withAuth } from '../middleware';
 import { scoreOneOrder, DEFAULT_ASSUMPTIONS } from '@/lib/engine/scorer';
-import { dbOrderToEngineOrder } from '@/lib/engine/pipeline';
+import { dbOrderToEngineOrder, enrichWithDisconnectData } from '@/lib/engine/pipeline';
 import type { Order } from '@/lib/types';
 
 /**
@@ -43,9 +43,11 @@ export const POST = withAuth(async (req, user) => {
       .where(eq(orders.region, targetOrder.region || ''))
       .limit(50000);
 
-    // Convert DB orders to engine Order format
-    const enginePool = pool.map(dbOrderToEngineOrder);
-    const engineTarget = dbOrderToEngineOrder(targetOrder);
+    // Convert DB orders to engine Order format with disconnect enrichment
+    const rawPool = pool.map(dbOrderToEngineOrder);
+    const enginePool = enrichWithDisconnectData(rawPool);
+    const enrichedTarget = enginePool.find(o => o.id === (targetOrder.externalId || targetOrder.id));
+    const engineTarget = enrichedTarget || dbOrderToEngineOrder(targetOrder);
 
     const result = scoreOneOrder(engineTarget, enginePool, DEFAULT_ASSUMPTIONS);
     return NextResponse.json(result);

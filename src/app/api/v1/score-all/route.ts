@@ -4,7 +4,7 @@ import { orders, cases } from '@/lib/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { withAuth } from '../middleware';
 import { scoreOneOrder, DEFAULT_ASSUMPTIONS } from '@/lib/engine/scorer';
-import { dbOrderToEngineOrder } from '@/lib/engine/pipeline';
+import { dbOrderToEngineOrder, enrichWithDisconnectData } from '@/lib/engine/pipeline';
 
 /**
  * POST /api/v1/score-all — Score all unscored orders and create cases
@@ -30,9 +30,10 @@ export const POST = withAuth(async (req, user) => {
     });
   }
 
-  // Build the full comparison pool
+  // Build the full comparison pool with disconnect data enrichment
   const allOrders = await db.select().from(orders).limit(100000);
-  const enginePool = allOrders.map(dbOrderToEngineOrder);
+  const rawPool = allOrders.map(dbOrderToEngineOrder);
+  const enginePool = enrichWithDisconnectData(rawPool);
 
   // Score each unscored connect order
   const connectOrders = unscoredOrders.filter(r => r.order.orderType === 'connect');
@@ -41,7 +42,9 @@ export const POST = withAuth(async (req, user) => {
 
   for (const row of connectOrders) {
     try {
-      const engineOrder = dbOrderToEngineOrder(row.order);
+      // Use enriched version from pool (has daysSinceDisconnect)
+      const enrichedOrder = enginePool.find(o => o.id === (row.order.externalId || row.order.id));
+      const engineOrder = enrichedOrder || dbOrderToEngineOrder(row.order);
       const scored = scoreOneOrder(engineOrder, enginePool, DEFAULT_ASSUMPTIONS);
 
       const now = new Date();
