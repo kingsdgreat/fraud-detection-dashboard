@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Shield, MapPin, Calendar, Phone, CreditCard,
   Mail, Fingerprint, Monitor, User, Clock, AlertTriangle,
-  FileText, Activity, UserCheck,
+  FileText, Activity, UserCheck, Sparkles, MessageSquare,
+  Send, ChevronDown, ChevronUp, BarChart3, Loader2, Brain,
+  TrendingUp, AlertCircle, RefreshCw,
 } from 'lucide-react';
 import { CaseActions } from '@/components/case-actions';
 import { ActivityTimeline } from '@/components/activity-timeline';
@@ -18,6 +20,25 @@ interface CaseDetail {
   comments: any[];
 }
 
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface AnomalySignal {
+  feature: string;
+  value: number;
+  populationMean: number;
+  zScore: number;
+  description: string;
+}
+
+interface AnomalyResult {
+  anomalyScore: number;
+  signals: AnomalySignal[];
+  isAnomalous: boolean;
+}
+
 export default function ProductionCaseDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -26,6 +47,18 @@ export default function ProductionCaseDetailPage() {
   const [data, setData] = useState<CaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'evidence' | 'activity' | 'order'>('evidence');
+
+  // AI state
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [anomalyData, setAnomalyData] = useState<AnomalyResult | null>(null);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const fetchCase = useCallback(async () => {
     try {
@@ -38,6 +71,99 @@ export default function ProductionCaseDetailPage() {
   }, [caseId, router]);
 
   useEffect(() => { fetchCase(); }, [fetchCase]);
+
+  // Check AI status
+  useEffect(() => {
+    fetch('/api/v1/ai/status')
+      .then(r => r.json())
+      .then(data => setAiEnabled(data.enabled))
+      .catch(() => setAiEnabled(false));
+  }, []);
+
+  // Auto-fetch AI summary when case loads
+  useEffect(() => {
+    if (data && caseId) {
+      fetchAiSummary();
+      fetchAnomalyData();
+    }
+  }, [data, caseId]);
+
+  // Scroll chat to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const fetchAiSummary = async () => {
+    setAiSummaryLoading(true);
+    try {
+      const res = await fetch('/api/v1/ai/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId }),
+      });
+      const json = await res.json();
+      if (json.summary) {
+        setAiSummary(json.summary);
+      } else if (json.fallback) {
+        // Generate a basic rule-based summary as fallback
+        setAiSummary(generateFallbackSummary(data!));
+      }
+    } catch {
+      if (data) setAiSummary(generateFallbackSummary(data));
+    }
+    setAiSummaryLoading(false);
+  };
+
+  const fetchAnomalyData = async () => {
+    setAnomalyLoading(true);
+    try {
+      const res = await fetch('/api/v1/ai/anomaly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId }),
+      });
+      const json = await res.json();
+      setAnomalyData(json);
+    } catch { /* ignore */ }
+    setAnomalyLoading(false);
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setChatLoading(true);
+
+    try {
+      const res = await fetch('/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseId,
+          message: userMessage,
+          history: chatMessages,
+        }),
+      });
+      const json = await res.json();
+
+      if (json.reply) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: json.reply }]);
+      } else {
+        setChatMessages(prev => [...prev, {
+          role: 'assistant',
+          content: json.message || 'AI features are not configured. Add your ANTHROPIC_API_KEY to Vercel environment variables to enable the AI analyst.',
+        }]);
+      }
+    } catch {
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+      }]);
+    }
+    setChatLoading(false);
+  };
 
   // Action handlers
   const handleAssign = async (id: string, analystId: string) => {
@@ -113,6 +239,151 @@ export default function ProductionCaseDetailPage() {
         </div>
       </div>
 
+      {/* AI Summary Panel */}
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center w-7 h-7 bg-indigo-100 rounded-lg">
+              <Brain className="h-4 w-4 text-indigo-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-indigo-900">AI Analysis</h3>
+            {aiEnabled && (
+              <span className="text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium">
+                CLAUDE POWERED
+              </span>
+            )}
+            {!aiEnabled && (
+              <span className="text-[9px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-medium">
+                RULE-BASED
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchAiSummary}
+              className="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1"
+              disabled={aiSummaryLoading}
+            >
+              <RefreshCw className={`h-3 w-3 ${aiSummaryLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <button
+              onClick={() => setChatOpen(!chatOpen)}
+              className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-300 transition-colors"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Ask AI
+            </button>
+          </div>
+        </div>
+
+        {aiSummaryLoading ? (
+          <div className="flex items-center gap-2 text-sm text-indigo-500 py-3">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Analyzing case evidence and order history...
+          </div>
+        ) : aiSummary ? (
+          <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+            {aiSummary}
+          </div>
+        ) : (
+          <p className="text-sm text-indigo-400 py-2">No analysis available yet.</p>
+        )}
+      </div>
+
+      {/* AI Chat Panel (collapsible) */}
+      {chatOpen && (
+        <div className="bg-white border border-indigo-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-indigo-600" />
+              <span className="text-sm font-semibold text-indigo-900">AI Analyst Chat</span>
+            </div>
+            <button onClick={() => setChatOpen(false)} className="text-indigo-400 hover:text-indigo-600">
+              <ChevronUp className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Chat messages */}
+          <div className="h-72 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
+            {chatMessages.length === 0 && (
+              <div className="text-center py-8">
+                <Brain className="h-8 w-8 text-indigo-200 mx-auto mb-3" />
+                <p className="text-sm text-slate-400 mb-3">Ask me anything about this case</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {[
+                    'Why was this order flagged?',
+                    'What should I do with this case?',
+                    'Is this agent suspicious?',
+                    'Explain the risk score',
+                  ].map(q => (
+                    <button
+                      key={q}
+                      onClick={() => { setChatInput(q); }}
+                      className="text-xs bg-white border border-indigo-200 text-indigo-600 px-3 py-1.5 rounded-full hover:bg-indigo-50 transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white border border-slate-200 text-slate-700'
+                }`}>
+                  {msg.role === 'assistant' && (
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Sparkles className="h-3 w-3 text-indigo-500" />
+                      <span className="text-[10px] font-semibold text-indigo-500">AI ANALYST</span>
+                    </div>
+                  )}
+                  <div className="whitespace-pre-line leading-relaxed">{msg.content}</div>
+                </div>
+              </div>
+            ))}
+
+            {chatLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-indigo-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Analyzing...
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Chat input */}
+          <div className="border-t border-slate-200 p-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
+                placeholder="Ask about this case..."
+                className="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                disabled={chatLoading}
+              />
+              <button
+                onClick={sendChatMessage}
+                disabled={chatLoading || !chatInput.trim()}
+                className="flex items-center justify-center w-9 h-9 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Case Actions */}
       <CaseActions
         caseId={caseId}
@@ -133,6 +404,32 @@ export default function ProductionCaseDetailPage() {
         <InfoCard icon={Shield} label="Region" value={order.region || 'N/A'} sub={`Account: ${order.accountNumber || 'N/A'}`} />
       </div>
 
+      {/* Anomaly Detection Panel */}
+      {anomalyData && anomalyData.isAnomalous && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center justify-center w-7 h-7 bg-amber-100 rounded-lg">
+              <TrendingUp className="h-4 w-4 text-amber-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-amber-900">Statistical Anomalies Detected</h3>
+            <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">
+              Score: {anomalyData.anomalyScore}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {anomalyData.signals.map((signal, i) => (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="text-slate-700">{signal.description}</span>
+                  <span className="text-[10px] text-amber-500 ml-2">z={signal.zScore}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
         <div className="flex border-b border-slate-200">
@@ -149,6 +446,62 @@ export default function ProductionCaseDetailPage() {
       </div>
     </div>
   );
+}
+
+// ── Fallback Summary Generator ────────────────────────────────
+
+function generateFallbackSummary(data: CaseDetail): string {
+  const { case: caseData, order } = data;
+  const evidence = Array.isArray(caseData.evidence) ? caseData.evidence : [];
+  const financialImpact = caseData.financialImpact || {};
+
+  const evidenceTypes = evidence.map((e: any) => e.type);
+  const patterns: string[] = [];
+
+  if (evidenceTypes.includes('address_disconnect_reuse') || evidenceTypes.includes('rapid_reconnect')) {
+    patterns.push('disconnect-reconnect fraud');
+  }
+  if (evidenceTypes.includes('identity_match')) {
+    patterns.push('identity signal reuse across accounts');
+  }
+  if (evidenceTypes.includes('payment_method_reuse')) {
+    patterns.push('payment method linked to prior disconnected account');
+  }
+  if (evidenceTypes.includes('phone_reuse')) {
+    patterns.push('phone number linked to prior disconnected account');
+  }
+  if (evidenceTypes.includes('same_customer_new_address')) {
+    patterns.push('same customer identity at a new address');
+  }
+  if (evidenceTypes.includes('agent_cluster')) {
+    patterns.push('agent with elevated fraud rate');
+  }
+
+  const patternStr = patterns.length > 0
+    ? `This case exhibits patterns consistent with ${patterns.join(', ')}.`
+    : 'No specific fraud patterns detected by the rule engine.';
+
+  const channelRisk = ['third_party_door_to_door', 'third_party_telemarketing'].includes(order.channel)
+    ? ` The order came through a ${order.channel?.replace(/_/g, ' ')} channel, which carries higher fraud risk.`
+    : '';
+
+  const financialStr = financialImpact.commissionAtRisk
+    ? ` Financial exposure: $${financialImpact.commissionAtRisk} commission at risk, $${financialImpact.annualizedExposure} annualized.`
+    : '';
+
+  const disconnectStr = order.disconnectReason
+    ? ` The prior account at this address was disconnected for ${order.disconnectReason}${order.delinquentBalance ? ` with $${order.delinquentBalance} outstanding balance` : ''}.`
+    : '';
+
+  const recommendation = caseData.riskScore >= 80
+    ? 'Recommendation: Place an immediate hold on this order and escalate for supervisor review.'
+    : caseData.riskScore >= 60
+    ? 'Recommendation: Review the identity signals carefully before approving. Consider contacting the customer for verification.'
+    : caseData.riskScore >= 35
+    ? 'Recommendation: Standard review. Check identity documents if available.'
+    : 'Recommendation: Low risk — proceed with standard processing.';
+
+  return `${order.customerName}'s connect order at ${order.address} scored ${caseData.riskScore}/100 (${caseData.riskBand} risk). ${patternStr}${channelRisk}${disconnectStr}${financialStr}\n\n${recommendation}`;
 }
 
 // ── Evidence Panel ──────────────────────────────────────────
