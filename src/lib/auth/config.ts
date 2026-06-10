@@ -1,5 +1,7 @@
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import Google from 'next-auth/providers/google';
+import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { getDb } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -7,27 +9,46 @@ import { eq } from 'drizzle-orm';
 /**
  * NextAuth.js v5 configuration.
  *
- * Uses JWT sessions (no database adapter needed for Credentials provider).
- * The DrizzleAdapter was removed because it conflicts with the Credentials
- * provider in NextAuth v5 — the adapter tries to manage user records
- * but Credentials bypasses that flow.
+ * Production auth: Google OAuth with optional domain restriction.
+ * Development auth: Credentials provider accepts any password for seeded users.
  *
- * If you add OAuth providers (Azure AD, Google, etc.), re-add the adapter:
- *   import { DrizzleAdapter } from '@auth/drizzle-adapter';
- *   adapter: DrizzleAdapter(getDb()),
+ * Set ALLOWED_EMAIL_DOMAIN to restrict Google sign-in to a specific domain
+ * (e.g., "yourcompany.com"). Leave unset to allow any Google account.
  */
+
+const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN; // e.g. "yourcompany.com"
+
 export const authConfig: NextAuthConfig = {
-  // No adapter — Credentials + JWT doesn't need one
-  // Secure cookies require HTTPS — disable when NEXTAUTH_URL is http://
-  // On Vercel (no NEXTAUTH_URL set), defaults to secure
-  useSecureCookies: !process.env.NEXTAUTH_URL?.startsWith('http://'),
+  adapter: DrizzleAdapter(getDb()),
+  // Force JWT strategy so sessions work with both OAuth and Credentials
   session: { strategy: 'jwt' },
+  useSecureCookies: !process.env.NEXTAUTH_URL?.startsWith('http://'),
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',
   },
   providers: [
-    // Credentials provider for development/testing
+    // ── Google OAuth (production) ──────────────────────────
+    // Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars
+    ...(process.env.GOOGLE_CLIENT_ID
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            authorization: {
+              params: {
+                prompt: 'consent',
+                access_type: 'offline',
+                response_type: 'code',
+                // If domain restriction is set, hint the domain to Google
+                ...(allowedDomain ? { hd: allowedDomain } : {}),
+              },
+            },
+          }),
+        ]
+      : []),
+
+    // ── Credentials provider (development only) ───────────
     Credentials({
       name: 'Email',
       credentials: {
@@ -35,73 +56,72 @@ export const authConfig: NextAuthConfig = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email) {
-          console.log('[auth] No email provided');
-          return null;
-        }
+        if (!credentials?.email) return null;
+
+        // Only allow credentials in dev mode
+        const isDevMode =
+          process.env.NODE_ENV === 'development' || process.env.AUTH_DEV_MODE === 'true';
+        if (!isDevMode) return null;
 
         try {
           const db = getDb();
           const email = credentials.email as string;
-          console.log('[auth] Looking up user:', email);
 
-          // Look up user by email
           const [user] = await db
             .select()
             .from(users)
             .where(eq(users.email, email))
             .limit(1);
 
-          if (!user) {
-            console.log('[auth] User not found:', email);
-            return null;
-          }
+          if (!user || !user.isActive) return null;
 
-          if (!user.isActive) {
-            console.log('[auth] User inactive:', email);
-            return null;
-          }
-
-          console.log('[auth] User found:', user.email, 'role:', user.role);
-          console.log('[auth] NODE_ENV:', process.env.NODE_ENV);
-          console.log('[auth] AUTH_DEV_MODE:', process.env.AUTH_DEV_MODE);
-
-          // In development, accept any password for seeded users
-          // AUTH_DEV_MODE=true allows this in production too (for staging/testing)
-          if (process.env.NODE_ENV === 'development' || process.env.AUTH_DEV_MODE === 'true') {
-            console.log('[auth] Dev mode auth — granting access');
-            return {
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              role: user.role,
-            };
-          }
-
-          console.log('[auth] Production mode — no dev auth, returning null');
-          // Production: This should be replaced with SSO or proper auth
-          return null;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          };
         } catch (err) {
-          console.error('[auth] Error in authorize:', err);
+          console.error('[auth] Credentials error:', err);
           return null;
         }
       },
     }),
-    // Add production providers here:
-    // AzureAD({ clientId: ..., clientSecret: ..., tenantId: ... }),
-    // Google({ clientId: ..., clientSecret: ... }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      // On initial sign-in, persist role into JWT
+    async signIn({ user, account }) {
+      // Domain restriction: block Google sign-ins from outside the allowed domain
+      if (account?.provider === 'google' && allowedDomain) {
+        const email = user.email || '';
+        if (!email.endsWith(`@${allowedDomain}`)) {
+          console.log(`[auth] Blocked sign-in from ${email} — not in @${allowedDomain}`);
+          return false;
+        }
+      }
+      return true;
+    },
+    async jwt({ token, user, account, trigger }) {
       if (user) {
-        token.role = (user as any).role || 'analyst';
-        token.userId = user.id;
+        // On initial sign-in, look up the user's role from the database
+        // OAuth users may not have a role set yet (new accounts default to 'analyst')
+        try {
+          const db = getDb();
+          const [dbUser] = await db
+            .select()
+            .from(users)
+            .where(eq(users.email, user.email!))
+            .limit(1);
+
+          token.role = dbUser?.role || (user as any).role || 'analyst';
+          token.userId = dbUser?.id || user.id;
+        } catch {
+          token.role = (user as any).role || 'analyst';
+          token.userId = user.id;
+        }
       }
       return token;
     },
     async session({ session, token }) {
-      // Expose role and userId in the client session
       if (session.user) {
         (session.user as any).role = token.role;
         (session.user as any).id = token.userId;
@@ -114,19 +134,15 @@ export const authConfig: NextAuthConfig = {
       const isApiRoute = nextUrl.pathname.startsWith('/api/v1');
       const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
-      // Demo mode: allow all access (no auth required)
       if (isDemoMode) return true;
 
-      // Auth pages: redirect to dashboard if already logged in
       if (isAuthPage) {
         if (isLoggedIn) return Response.redirect(new URL('/prod', nextUrl));
         return true;
       }
 
-      // API routes: handled by individual route middleware
       if (isApiRoute) return true;
 
-      // All other pages require login
       return isLoggedIn;
     },
   },
