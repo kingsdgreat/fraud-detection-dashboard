@@ -58,6 +58,8 @@ export default function ProductionCaseDetailPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [anomalyData, setAnomalyData] = useState<AnomalyResult | null>(null);
   const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const [mlData, setMlData] = useState<any>(null);
+  const [mlLoading, setMlLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const fetchCase = useCallback(async () => {
@@ -85,6 +87,7 @@ export default function ProductionCaseDetailPage() {
     if (data && caseId) {
       fetchAiSummary();
       fetchAnomalyData();
+      fetchMlScore();
     }
   }, [data, caseId]);
 
@@ -126,6 +129,20 @@ export default function ProductionCaseDetailPage() {
       setAnomalyData(json);
     } catch { /* ignore */ }
     setAnomalyLoading(false);
+  };
+
+  const fetchMlScore = async () => {
+    setMlLoading(true);
+    try {
+      const res = await fetch('/api/v1/ai/ml-score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId }),
+      });
+      const json = await res.json();
+      setMlData(json);
+    } catch { /* ignore */ }
+    setMlLoading(false);
   };
 
   const sendChatMessage = async () => {
@@ -427,6 +444,105 @@ export default function ProductionCaseDetailPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ML Scoring Breakdown */}
+      {mlData && mlData.composite && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-7 h-7 bg-blue-100 rounded-lg">
+                  <BarChart3 className="h-4 w-4 text-blue-600" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-900">ML Scoring Breakdown</h3>
+                <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">
+                  {mlData.composite.activeLayers} LAYERS ACTIVE
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Composite Score:</span>
+                <span className={`text-lg font-bold ${
+                  mlData.composite.finalScore >= 80 ? 'text-red-600' :
+                  mlData.composite.finalScore >= 60 ? 'text-orange-600' :
+                  mlData.composite.finalScore >= 35 ? 'text-amber-600' :
+                  'text-green-600'
+                }`}>
+                  {mlData.composite.finalScore}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* Layer scores */}
+            <div className="space-y-3">
+              {mlData.composite.layers.map((layer: any, i: number) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-36 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-slate-700">{layer.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                        layer.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        {layer.active ? `${layer.score}` : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        !layer.active ? 'bg-slate-200' :
+                        layer.score >= 80 ? 'bg-red-500' :
+                        layer.score >= 60 ? 'bg-orange-500' :
+                        layer.score >= 35 ? 'bg-amber-500' :
+                        layer.score > 0 ? 'bg-blue-500' :
+                        'bg-slate-200'
+                      }`}
+                      style={{ width: `${layer.active ? layer.score : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-400 w-12 text-right flex-shrink-0">
+                    {(layer.weight * 100).toFixed(0)}% wt
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* ML Evidence */}
+            {mlData.composite.mlEvidence.length > 0 && (
+              <div className="border-t border-slate-100 pt-4">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">ML-Generated Evidence</h4>
+                <div className="space-y-2">
+                  {mlData.composite.mlEvidence.map((e: any, i: number) => (
+                    <div key={i} className="flex items-start gap-2 text-sm">
+                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
+                        e.source === 'embeddings' ? 'bg-purple-500' :
+                        e.source === 'isolation_forest' ? 'bg-amber-500' :
+                        e.source === 'gradient_boost' ? 'bg-blue-500' :
+                        e.source === 'graph_analysis' ? 'bg-cyan-500' :
+                        'bg-slate-400'
+                      }`} />
+                      <div>
+                        <span className="text-slate-700">{e.description}</span>
+                        <span className="text-[10px] text-slate-400 ml-2">
+                          {e.source.replace('_', ' ')} · {(e.confidence * 100).toFixed(0)}% confidence
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {mlLoading && (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 flex items-center gap-3 text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Running ML scoring layers...</span>
         </div>
       )}
 
