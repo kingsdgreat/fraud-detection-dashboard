@@ -3,7 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { getDb } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import { users, accounts, sessions, verificationTokens } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -19,7 +19,12 @@ import { eq } from 'drizzle-orm';
 const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN; // e.g. "yourcompany.com"
 
 export const authConfig: NextAuthConfig = {
-  adapter: DrizzleAdapter(getDb()),
+  adapter: DrizzleAdapter(getDb(), {
+    usersTable: users,
+    accountsTable: accounts,
+    sessionsTable: sessions,
+    verificationTokensTable: verificationTokens,
+  } as any),
   // Force JWT strategy so sessions work with both OAuth and Credentials
   session: { strategy: 'jwt' },
   useSecureCookies: !process.env.NEXTAUTH_URL?.startsWith('http://'),
