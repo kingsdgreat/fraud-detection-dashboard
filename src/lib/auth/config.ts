@@ -1,9 +1,8 @@
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
-import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { getDb } from '@/lib/db';
-import { users, accounts, sessions, verificationTokens } from '@/lib/db/schema';
+import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -12,6 +11,11 @@ import { eq } from 'drizzle-orm';
  * Production auth: Google OAuth with optional domain restriction.
  * Development auth: Credentials provider accepts any password for seeded users.
  *
+ * We use JWT strategy (no database sessions) and handle user creation
+ * manually in the signIn callback rather than using DrizzleAdapter.
+ * This avoids adapter compatibility issues and gives us full control
+ * over our custom fields (role, team, isActive).
+ *
  * Set ALLOWED_EMAIL_DOMAIN to restrict Google sign-in to a specific domain
  * (e.g., "yourcompany.com"). Leave unset to allow any Google account.
  */
@@ -19,13 +23,8 @@ import { eq } from 'drizzle-orm';
 const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN; // e.g. "yourcompany.com"
 
 export const authConfig: NextAuthConfig = {
-  adapter: DrizzleAdapter(getDb(), {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  } as any),
-  // Force JWT strategy so sessions work with both OAuth and Credentials
+  // No adapter — we handle user creation manually in signIn callback.
+  // JWT strategy means sessions live in the cookie, not in the DB.
   session: { strategy: 'jwt' },
   useSecureCookies: !process.env.NEXTAUTH_URL?.startsWith('http://'),
   pages: {
@@ -34,7 +33,6 @@ export const authConfig: NextAuthConfig = {
   },
   providers: [
     // ── Google OAuth (production) ──────────────────────────
-    // Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars
     ...(process.env.GOOGLE_CLIENT_ID
       ? [
           Google({
@@ -45,7 +43,6 @@ export const authConfig: NextAuthConfig = {
                 prompt: 'consent',
                 access_type: 'offline',
                 response_type: 'code',
-                // If domain restriction is set, hint the domain to Google
                 ...(allowedDomain ? { hd: allowedDomain } : {}),
               },
             },
@@ -63,7 +60,6 @@ export const authConfig: NextAuthConfig = {
       async authorize(credentials) {
         if (!credentials?.email) return null;
 
-        // Only allow credentials in dev mode
         const isDevMode =
           process.env.NODE_ENV === 'development' || process.env.AUTH_DEV_MODE === 'true';
         if (!isDevMode) return null;
@@ -94,7 +90,7 @@ export const authConfig: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       // Domain restriction: block Google sign-ins from outside the allowed domain
       if (account?.provider === 'google' && allowedDomain) {
         const email = user.email || '';
@@ -103,12 +99,50 @@ export const authConfig: NextAuthConfig = {
           return false;
         }
       }
+
+      // For Google OAuth: ensure the user exists in our database
+      if (account?.provider === 'google' && user.email) {
+        try {
+          const db = getDb();
+          const [existing] = await db
+            .select()
+            .from(users)
+            .where(eq(users.email, user.email))
+            .limit(1);
+
+          if (!existing) {
+            // First-time Google sign-in: create the user record
+            await db.insert(users).values({
+              email: user.email,
+              name: user.name || user.email.split('@')[0],
+              image: user.image || null,
+              emailVerified: new Date(),
+              role: 'analyst',
+              isActive: true,
+            });
+            console.log(`[auth] Created new user for ${user.email}`);
+          } else {
+            // Returning user: update last login and image
+            await db
+              .update(users)
+              .set({
+                lastLoginAt: new Date(),
+                image: user.image || existing.image,
+                emailVerified: existing.emailVerified || new Date(),
+              })
+              .where(eq(users.email, user.email));
+          }
+        } catch (err) {
+          console.error('[auth] Error syncing Google user to DB:', err);
+          // Still allow sign-in even if DB sync fails — JWT has the basics
+        }
+      }
+
       return true;
     },
-    async jwt({ token, user, account, trigger }) {
+    async jwt({ token, user, account }) {
       if (user) {
         // On initial sign-in, look up the user's role from the database
-        // OAuth users may not have a role set yet (new accounts default to 'analyst')
         try {
           const db = getDb();
           const [dbUser] = await db
