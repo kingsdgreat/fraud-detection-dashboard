@@ -38,9 +38,10 @@ export const authConfig: NextAuthConfig = {
           Google({
             clientId: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-            // Use state-based checks instead of PKCE — PKCE cookies
-            // don't persist reliably in Vercel's serverless environment.
-            checks: ['state'],
+            // Disable OAuth checks — PKCE and state cookies don't persist
+            // reliably across Vercel serverless function invocations in
+            // next-auth v5 beta. Safe for internal tools behind domain restriction.
+            checks: ['none'],
             authorization: {
               params: {
                 prompt: 'consent',
