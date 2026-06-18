@@ -4,7 +4,7 @@ import { AppProviders } from '@/components/app-providers';
 import { LayoutShell } from '@/components/layout-shell';
 
 export const metadata: Metadata = {
-  title: 'Fraud Review Dashboard',
+  title: 'Relecom Dashboard',
   description: 'Disconnect-Reconnect Fraud Detection System',
 };
 

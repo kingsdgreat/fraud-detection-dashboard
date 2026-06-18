@@ -44,10 +44,6 @@ function countIdentityMatches(a: Order, orders: Order[]): {
       matchCount++;
       currentSignals.push('paymentMethodHash');
     }
-    if (signals.ssnLast4Hash && b.identitySignals.ssnLast4Hash === signals.ssnLast4Hash) {
-      matchCount++;
-      currentSignals.push('ssnLast4Hash');
-    }
     if (
       signals.equipmentSerialHistory?.length &&
       b.identitySignals.equipmentSerialHistory?.length

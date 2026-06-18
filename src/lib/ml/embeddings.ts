@@ -237,7 +237,9 @@ export function findSimilarNames(
  * Score an order's address and name against a pool of existing orders
  * using embedding similarity. Returns a 0-100 fraud risk score based on
  * how similar the order's fields are to known records, with heavy weight
- * on disconnected address matches (reconnect fraud indicator).
+ * on name similarity (the strongest signal for identity manipulation).
+ * Address similarity is supplementary since Spectrum handles address
+ * validation externally via USPS.
  *
  * @param order - The order to evaluate (must have address, customerName, id, zip, normalizedAddress, normalizedName)
  * @param pool - Array of existing orders to compare against
@@ -290,42 +292,87 @@ export function scoreEmbeddingSimilarity(
   const nameMatches = findSimilarNames(order.customerName, namePool, 0.70);
 
   // ── Score Calculation ──────────────────────────────────────────
+  // Name similarity is the strongest signal — it catches "Kingsley" vs "Kings",
+  // reversed names, spelling variations, and other identity manipulation.
+  // Address similarity is supplementary since Spectrum already handles address
+  // validation externally via USPS.
   let score = 0;
 
-  // Address matches contribute to score
+  // Partition address matches for use in name overlap detection
   const disconnectedAddressMatches = addressMatches.filter(m => m.isDisconnected);
   const activeAddressMatches = addressMatches.filter(m => !m.isDisconnected);
 
+  // ── Name matches (primary signal) ──────────────────────────────
+  if (nameMatches.length > 0) {
+    const bestNameSim = nameMatches[0].similarity;
+
+    // Check if any name match corresponds to a disconnected address match —
+    // this is the strongest signal: similar name at an address with a recent
+    // disconnect (e.g., "Kingsley" vs "Kings" at a previously disconnected address)
+    const nameDisconnectOverlap = nameMatches.filter(nm =>
+      disconnectedAddressMatches.some(am => am.id === nm.id),
+    );
+
+    if (nameDisconnectOverlap.length > 0) {
+      // Name match with disconnected address overlap — the strongest signal
+      // Scale: 0.70 similarity -> 22 points, 1.0 similarity -> 55 points
+      const overlapScore = Math.min(55, Math.round(
+        22 + (bestNameSim - 0.70) * (33 / 0.30),
+      ));
+      score += overlapScore;
+
+      details.push(
+        `Name similarity detected with ${nameDisconnectOverlap.length} disconnected account(s) at a similar address. ` +
+        `Best name similarity: ${(bestNameSim * 100).toFixed(1)}% with "${nameMatches[0].value}". ` +
+        `Similar name at a previously disconnected address is a hallmark of identity manipulation.`,
+      );
+    } else {
+      // Name match without disconnect overlap — still very valuable as a
+      // standalone signal for catching name variations and identity tricks
+      // Scale: 0.70 similarity -> 10 points, 1.0 similarity -> 30 points
+      const nameScore = Math.min(30, Math.round(
+        10 + (bestNameSim - 0.70) * (20 / 0.30),
+      ));
+      score += nameScore;
+
+      details.push(
+        `Found ${nameMatches.length} similar name(s). ` +
+        `Best similarity: ${(bestNameSim * 100).toFixed(1)}% with "${nameMatches[0].value}". ` +
+        `Name similarity is a key indicator of potential identity manipulation.`,
+      );
+    }
+  }
+
+  // ── Address matches (supplementary signal) ─────────────────────
+  // Address validation is handled externally by Spectrum (USPS), so address
+  // embedding similarity carries less weight here — it supplements name signals.
   if (disconnectedAddressMatches.length > 0) {
-    // Disconnected address matches are the strongest signal — they indicate
-    // someone is reusing a disconnected service address with slight variations
-    // (e.g., "123 Main St" vs "123 Main Street Apt A")
     const bestDisconnectedSim = disconnectedAddressMatches[0].similarity;
 
-    // Scale: 0.70 similarity -> 20 points, 1.0 similarity -> 60 points
-    const disconnectScore = Math.min(60, Math.round(
-      20 + (bestDisconnectedSim - 0.70) * (40 / 0.30),
+    // Scale: 0.70 similarity -> 5 points, 1.0 similarity -> 15 points
+    const disconnectScore = Math.min(15, Math.round(
+      5 + (bestDisconnectedSim - 0.70) * (10 / 0.30),
     ));
     score += disconnectScore;
 
-    // Additional penalty for multiple disconnected matches
+    // Small additional penalty for multiple disconnected matches
     if (disconnectedAddressMatches.length > 1) {
-      score += Math.min(10, disconnectedAddressMatches.length * 3);
+      score += Math.min(5, disconnectedAddressMatches.length * 2);
     }
 
     details.push(
       `Found ${disconnectedAddressMatches.length} disconnected address match(es). ` +
       `Best similarity: ${(bestDisconnectedSim * 100).toFixed(1)}% with "${disconnectedAddressMatches[0].value}". ` +
-      `This is a strong indicator of address spoofing for reconnect fraud.`,
+      `Address similarity supplements the name-based signal (address validation is handled externally by Spectrum).`,
     );
   }
 
   if (activeAddressMatches.length > 0) {
-    // Active (non-disconnected) address matches are weaker signals — could be
-    // apartment buildings, nearby addresses, etc.
+    // Active (non-disconnected) address matches are minimal signals — could be
+    // apartment buildings, nearby addresses, etc. Address validation is external.
     const bestActiveSim = activeAddressMatches[0].similarity;
-    const activeScore = Math.min(15, Math.round(
-      5 + (bestActiveSim - 0.70) * (10 / 0.30),
+    const activeScore = Math.min(5, Math.round(
+      1 + (bestActiveSim - 0.70) * (4 / 0.30),
     ));
     score += activeScore;
 
@@ -335,48 +382,12 @@ export function scoreEmbeddingSimilarity(
     );
   }
 
-  // Name matches
-  if (nameMatches.length > 0) {
-    const bestNameSim = nameMatches[0].similarity;
-
-    // Check if any name match corresponds to an address match — this is the
-    // "same person, slightly different name" pattern
-    const nameAddressOverlap = nameMatches.filter(nm =>
-      addressMatches.some(am => am.id === nm.id),
-    );
-
-    if (nameAddressOverlap.length > 0) {
-      // Name AND address both fuzzy-match the same record — very suspicious
-      const overlapScore = Math.min(25, Math.round(
-        10 + (bestNameSim - 0.70) * (15 / 0.30),
-      ));
-      score += overlapScore;
-
-      details.push(
-        `Name similarity detected with ${nameAddressOverlap.length} record(s) that also match by address. ` +
-        `Best name similarity: ${(bestNameSim * 100).toFixed(1)}% with "${nameMatches[0].value}". ` +
-        `Combined name+address fuzzy match is a hallmark of identity manipulation.`,
-      );
-    } else {
-      // Name match without address overlap — moderate signal
-      const nameScore = Math.min(10, Math.round(
-        3 + (bestNameSim - 0.70) * (7 / 0.30),
-      ));
-      score += nameScore;
-
-      details.push(
-        `Found ${nameMatches.length} similar name(s). ` +
-        `Best similarity: ${(bestNameSim * 100).toFixed(1)}% with "${nameMatches[0].value}".`,
-      );
-    }
-  }
-
   // Cap at 100
   score = Math.min(100, score);
 
   if (score === 0) {
     details.push(
-      'No significant address or name similarity detected against the comparison pool.',
+      'No significant name or address similarity detected against the comparison pool.',
     );
   }
 

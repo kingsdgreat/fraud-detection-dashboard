@@ -46,7 +46,7 @@ function ErrorContent() {
           Back to Sign In
         </Link>
 
-        <p className="text-xs text-slate-600 text-center mt-6">FraudShield v1.0</p>
+        <p className="text-xs text-slate-600 text-center mt-6">Relecom v1.0</p>
       </div>
     </div>
   );

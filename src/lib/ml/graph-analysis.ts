@@ -2,7 +2,7 @@
  * Graph-Based Fraud Network Detection — Pure TypeScript
  *
  * Builds an in-memory graph from the order pool connecting orders through
- * shared signals (address, phone, email, payment method, SSN, equipment,
+ * shared signals (address, phone, email, payment method, equipment,
  * agent). Detects fraud networks by finding connected components where
  * orders share multiple identity signals.
  *
@@ -13,7 +13,7 @@
 
 export interface GraphNode {
   id: string;
-  type: 'order' | 'address' | 'phone' | 'email' | 'payment' | 'ssn' | 'agent' | 'equipment';
+  type: 'order' | 'address' | 'phone' | 'email' | 'payment' | 'agent' | 'equipment';
   label: string;
   metadata?: Record<string, unknown>;
 }
@@ -98,7 +98,7 @@ export class FraudGraph {
    * Build the full graph from an array of orders.
    *
    * Creates nodes for each order and for each unique signal value
-   * (address, phone, email, payment, SSN, equipment, agent). Connects
+   * (address, phone, email, payment, equipment, agent). Connects
    * orders to their signal nodes with typed edges.
    */
   buildFromOrders(orders: Array<{
@@ -112,7 +112,6 @@ export class FraudGraph {
       phoneHash?: string;
       emailHash?: string;
       paymentMethodHash?: string;
-      ssnLast4Hash?: string;
       equipmentSerialHistory?: string[];
     };
     [key: string]: unknown;
@@ -184,18 +183,6 @@ export class FraudGraph {
           label: `Payment ${paymentHash.substring(0, 8)}...`,
         });
         this.addEdge({ source: orderNodeId, target: paymentNodeId, type: 'has_payment' });
-      }
-
-      // SSN signal
-      const ssnHash = order.identitySignals?.ssnLast4Hash;
-      if (ssnHash) {
-        const ssnNodeId = `ssn:${ssnHash}`;
-        this.addNode({
-          id: ssnNodeId,
-          type: 'ssn',
-          label: `SSN ${ssnHash.substring(0, 8)}...`,
-        });
-        this.addEdge({ source: orderNodeId, target: ssnNodeId, type: 'has_ssn' });
       }
 
       // Equipment signal(s)
@@ -424,7 +411,6 @@ export class FraudGraph {
       riskScore += Math.round(density * 20);
 
       // High-value signal bonuses
-      if (signalTypesShared.has('ssn')) riskScore += 10;
       if (signalTypesShared.has('payment')) riskScore += 5;
 
       riskScore = Math.min(100, riskScore);
@@ -582,7 +568,6 @@ function generateNetworkDescription(
         case 'phone': return 'phone number';
         case 'email': return 'email';
         case 'payment': return 'payment method';
-        case 'ssn': return 'SSN';
         case 'equipment': return 'equipment serial';
         default: return s;
       }
@@ -608,9 +593,9 @@ function generateNetworkDescription(
   if (hasMultipleCustomers && sharedSignals.includes('address')) {
     description +=
       ' Multiple customer names at the same address with shared identity signals suggests name-swap fraud.';
-  } else if (sharedSignals.includes('ssn') && sharedSignals.includes('payment')) {
+  } else if (sharedSignals.includes('phone') && sharedSignals.includes('payment')) {
     description +=
-      ' SSN and payment method reuse across orders is a strong indicator of the same individual.';
+      ' Phone and payment method reuse across orders is a strong indicator of the same individual.';
   } else if (sharedSignals.length >= 3) {
     description +=
       ' High signal overlap across multiple dimensions indicates coordinated fraud activity.';
@@ -641,7 +626,6 @@ export function scoreGraphNetwork(
       phoneHash?: string;
       emailHash?: string;
       paymentMethodHash?: string;
-      ssnLast4Hash?: string;
       equipmentSerialHistory?: string[];
     };
     [key: string]: unknown;
@@ -657,7 +641,6 @@ export function scoreGraphNetwork(
       phoneHash?: string;
       emailHash?: string;
       paymentMethodHash?: string;
-      ssnLast4Hash?: string;
       equipmentSerialHistory?: string[];
     };
     [key: string]: unknown;

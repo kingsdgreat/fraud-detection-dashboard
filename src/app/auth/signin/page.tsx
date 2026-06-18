@@ -86,7 +86,7 @@ function SignInForm() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 mb-4">
             <Shield className="h-8 w-8 text-blue-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white">FraudShield</h1>
+          <h1 className="text-2xl font-bold text-white">Relecom</h1>
           <p className="text-slate-400 mt-1">Sign in to access the dashboard</p>
         </div>
 
@@ -170,7 +170,7 @@ function SignInForm() {
         </form>
 
         <p className="text-xs text-slate-600 text-center mt-6">
-          FraudShield v1.0
+          Relecom v1.0
         </p>
       </div>
     </div>

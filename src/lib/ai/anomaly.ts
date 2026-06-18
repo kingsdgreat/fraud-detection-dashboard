@@ -47,7 +47,7 @@ export function detectAnomalies(order: Order, pool: Order[]): AnomalyResult {
 
   // 1. Identity signal sharing frequency
   // How many other orders share each of this order's identity signals?
-  const identityKeys = ['phoneHash', 'emailHash', 'paymentMethodHash', 'ssnLast4Hash'] as const;
+  const identityKeys = ['phoneHash', 'emailHash', 'paymentMethodHash'] as const;
 
   for (const key of identityKeys) {
     const value = (order.identitySignals as any)?.[key];

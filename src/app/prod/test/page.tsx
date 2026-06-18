@@ -93,7 +93,6 @@ interface FormState {
   phoneHash: string;
   emailHash: string;
   paymentMethodHash: string;
-  ssnLast4Hash: string;
   equipmentSerials: string;
 }
 
@@ -121,7 +120,6 @@ const EMPTY_FORM: FormState = {
   phoneHash: '',
   emailHash: '',
   paymentMethodHash: '',
-  ssnLast4Hash: '',
   equipmentSerials: '',
 };
 
@@ -150,7 +148,6 @@ const EXAMPLE_SUSPICIOUS: FormState = {
   phoneHash: '',
   emailHash: '',
   paymentMethodHash: '',
-  ssnLast4Hash: '',
   equipmentSerials: 'EQ887712,EQ991234',
 };
 
@@ -178,7 +175,6 @@ const EXAMPLE_CLEAN: FormState = {
   phoneHash: '',
   emailHash: '',
   paymentMethodHash: '',
-  ssnLast4Hash: '',
   equipmentSerials: '',
 };
 
@@ -198,7 +194,6 @@ interface PriorAccountState {
   samePhone: boolean;
   samePayment: boolean;
   sameEmail: boolean;
-  sameSsn: boolean;
   sameEquipment: boolean;
 }
 
@@ -217,7 +212,6 @@ const EMPTY_PRIOR: PriorAccountState = {
   samePhone: true,
   samePayment: true,
   sameEmail: false,
-  sameSsn: false,
   sameEquipment: false,
 };
 
@@ -240,7 +234,6 @@ const PRESET_SUSPICIOUS: ExamplePreset = {
     samePhone: true,
     samePayment: true,
     sameEmail: true,
-    sameSsn: true,
     sameEquipment: true,
   },
 };
@@ -272,7 +265,6 @@ const PRESET_FAKE_NAME: ExamplePreset = {
     samePhone: true,
     samePayment: true,
     sameEmail: false,
-    sameSsn: false,
     sameEquipment: false,
   },
 };
@@ -532,7 +524,6 @@ function ResultsPanel({ result }: { result: ScoredCase }) {
                   { icon: <Mail className="h-3 w-3" />, label: 'Email', key: 'emailHash', value: signals.emailHash },
                   { icon: <CreditCard className="h-3 w-3" />, label: 'Payment', key: 'paymentMethodHash', value: signals.paymentMethodHash },
                   { icon: <Package className="h-3 w-3" />, label: 'Equipment', key: 'equipmentSerialHistory', value: signals.equipmentSerialHistory?.join(', ') },
-                  { icon: <Hash className="h-3 w-3" />, label: 'SSN Last 4', key: 'ssnLast4Hash', value: signals.ssnLast4Hash },
                 ];
 
                 return (
@@ -683,7 +674,6 @@ export default function ProductionTestOrderPage() {
           phoneHash: orderPhoneHash,
           emailHash: orderEmailHash,
           paymentMethodHash: orderPaymentHash,
-          ssnLast4Hash: form.ssnLast4Hash || undefined,
           equipmentSerialHistory: orderEquipment,
         },
         _isFraud: false,
@@ -721,7 +711,6 @@ export default function ProductionTestOrderPage() {
             phoneHash: prior.samePhone ? orderPhoneHash : `ph_${priorNameBase.slice(0, 8)}`,
             emailHash: prior.sameEmail ? orderEmailHash : `em_${priorNameBase.slice(0, 8)}`,
             paymentMethodHash: prior.samePayment ? orderPaymentHash : `pm_${priorNameBase.slice(0, 8)}`,
-            ssnLast4Hash: prior.sameSsn ? (form.ssnLast4Hash || `ss_${hashCode(form.customerName).slice(0, 6)}`) : `ss_${priorNameBase.slice(0, 6)}`,
             equipmentSerialHistory: prior.sameEquipment ? orderEquipment : [`EQ${Date.now().toString().slice(-6)}X`],
           },
           _isFraud: false,
@@ -936,9 +925,6 @@ export default function ProductionTestOrderPage() {
                   <Field label="Payment Method Hash">
                     <Input value={form.paymentMethodHash} onChange={e => update('paymentMethodHash', e.target.value)} placeholder="Auto-generated" className="font-mono text-xs" />
                   </Field>
-                  <Field label="SSN Last 4 Hash">
-                    <Input value={form.ssnLast4Hash} onChange={e => update('ssnLast4Hash', e.target.value)} placeholder="Optional" className="font-mono text-xs" />
-                  </Field>
                   <div className="col-span-2">
                     <Field label="Equipment Serials" hint="Comma-separated.">
                       <Input value={form.equipmentSerials} onChange={e => update('equipmentSerials', e.target.value)} placeholder="EQ123456, EQ789012" className="font-mono text-xs" />
@@ -1056,12 +1042,6 @@ export default function ProductionTestOrderPage() {
                           icon={<Mail className="h-3.5 w-3.5" />}
                           checked={prior.sameEmail}
                           onChange={v => updatePrior('sameEmail', v)}
-                        />
-                        <SignalToggle
-                          label="Same SSN Last 4"
-                          icon={<Hash className="h-3.5 w-3.5" />}
-                          checked={prior.sameSsn}
-                          onChange={v => updatePrior('sameSsn', v)}
                         />
                         <SignalToggle
                           label="Same Equipment"

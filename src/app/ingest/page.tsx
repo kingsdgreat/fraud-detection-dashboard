@@ -221,7 +221,7 @@ export default function IngestPage() {
                   Required columns: <span className="font-mono text-gray-700">external_id, order_date, order_type, customer_name, address</span>
                 </p>
                 <p className="text-xs text-gray-500">
-                  Optional columns: city, state, zip, phone_hash, email_hash, payment_method_hash, ssn_last4_hash, equipment_id, channel, agent_id, region, promo_code, account_number, disconnect_reason, delinquent_balance
+                  Optional columns: city, state, zip, phone_hash, email_hash, payment_method_hash, equipment_id, channel, agent_id, region, promo_code, account_number, disconnect_reason, delinquent_balance
                 </p>
               </div>
             </>

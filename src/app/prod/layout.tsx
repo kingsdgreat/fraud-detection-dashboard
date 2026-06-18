@@ -46,7 +46,7 @@ export default function ProductionLayout({ children }: { children: React.ReactNo
             <Shield className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="font-bold text-sm">Fraud Detection</p>
+            <p className="font-bold text-sm">Relecom</p>
             <p className="text-xs text-slate-400">Spectrum Systems</p>
           </div>
         </div>

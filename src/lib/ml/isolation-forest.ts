@@ -293,7 +293,6 @@ const FEATURE_NAMES = [
   'shared_phone_count',
   'shared_email_count',
   'shared_payment_count',
-  'shared_ssn_count',
   'agent_order_count',
   'days_since_disconnect_norm',
   'channel_risk',
@@ -323,7 +322,6 @@ export function extractFeatures(
       phoneHash?: string;
       emailHash?: string;
       paymentMethodHash?: string;
-      ssnLast4Hash?: string;
       equipmentSerialHistory?: string[];
     };
     [key: string]: unknown;
@@ -339,7 +337,6 @@ export function extractFeatures(
       phoneHash?: string;
       emailHash?: string;
       paymentMethodHash?: string;
-      ssnLast4Hash?: string;
       equipmentSerialHistory?: string[];
     };
     [key: string]: unknown;
@@ -376,13 +373,7 @@ export function extractFeatures(
     ? others.filter(p => p.identitySignals?.paymentMethodHash === paymentHash).length
     : 0;
 
-  // Feature 5: Number of orders sharing this SSN hash
-  const ssnHash = order.identitySignals?.ssnLast4Hash;
-  const sharedSSN = ssnHash
-    ? others.filter(p => p.identitySignals?.ssnLast4Hash === ssnHash).length
-    : 0;
-
-  // Feature 6: Number of orders from this agent
+  // Feature 5: Number of orders from this agent
   const agentCode = order.agentCode;
   const agentOrders = agentCode
     ? others.filter(p => p.agentCode === agentCode).length
@@ -411,7 +402,6 @@ export function extractFeatures(
     if (phoneHash && other.identitySignals?.phoneHash === phoneHash) matchCount++;
     if (emailHash && other.identitySignals?.emailHash === emailHash) matchCount++;
     if (paymentHash && other.identitySignals?.paymentMethodHash === paymentHash) matchCount++;
-    if (ssnHash && other.identitySignals?.ssnLast4Hash === ssnHash) matchCount++;
     if (matchCount > identityOverlap) {
       identityOverlap = matchCount;
     }
@@ -422,7 +412,6 @@ export function extractFeatures(
     sharedPhone,
     sharedEmail,
     sharedPayment,
-    sharedSSN,
     agentOrders,
     daysSinceDisconnectNorm,
     channelRisk,

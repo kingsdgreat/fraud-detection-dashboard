@@ -103,7 +103,6 @@ function generateIdentity(rng: seedrandom.PRNG, name: string, extra?: Partial<Re
     phoneHash: extra?.phoneHash || `ph_${base.slice(0, 8)}`,
     emailHash: extra?.emailHash || `em_${base.slice(0, 8)}`,
     paymentMethodHash: extra?.paymentMethodHash || `pm_${base.slice(0, 8)}`,
-    ssnLast4Hash: extra?.ssnLast4Hash || `ss_${base.slice(0, 6)}`,
     equipmentSerialHistory: extra?.equipmentSerialHistory
       ? [extra.equipmentSerialHistory]
       : [`EQ${randInt(rng, 100000, 999999)}`],
@@ -295,7 +294,6 @@ export function generateOrders(config: Partial<GeneratorConfig> = {}): Order[] {
         phoneHash: fraudOrder.identitySignals.phoneHash, // Same phone as fraud order
         emailHash: `em_${hashCode(originalName).slice(0, 8)}`,
         paymentMethodHash: fraudOrder.identitySignals.paymentMethodHash, // Same payment method
-        ssnLast4Hash: fraudOrder.identitySignals.ssnLast4Hash,
         equipmentSerialHistory: fraudOrder.identitySignals.equipmentSerialHistory,
       },
       _isFraud: false,
@@ -452,7 +450,6 @@ function generateFraudOrder(
         phoneHash: baseIdentity.phoneHash,
         emailHash: `em_${hashCode(fakeName).slice(0, 8)}`, // Different email
         paymentMethodHash: baseIdentity.paymentMethodHash, // Same payment
-        ssnLast4Hash: baseIdentity.ssnLast4Hash,
         equipmentSerialHistory: [equipSerial],
       };
       break;

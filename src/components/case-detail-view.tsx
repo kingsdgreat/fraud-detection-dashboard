@@ -262,7 +262,6 @@ function IdentityPanel({ scoredCase }: { scoredCase: ScoredCase }) {
     { icon: <Mail className="h-3 w-3" />, label: 'Email', key: 'emailHash', value: signals.emailHash || '—' },
     { icon: <CreditCard className="h-3 w-3" />, label: 'Payment', key: 'paymentMethodHash', value: signals.paymentMethodHash || '—' },
     { icon: <Package className="h-3 w-3" />, label: 'Equipment', key: 'equipmentSerialHistory', value: signals.equipmentSerialHistory?.join(', ') || '—' },
-    { icon: <Hash className="h-3 w-3" />, label: 'SSN Last 4', key: 'ssnLast4Hash', value: signals.ssnLast4Hash || '—' },
   ];
 
   return (
