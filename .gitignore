@@ -47,3 +47,5 @@ next-env.d.ts
 *.docx
 *.pdf
 ~$*
+design-mockup.html
+design-prompt.md

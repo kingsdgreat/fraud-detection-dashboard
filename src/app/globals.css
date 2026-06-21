@@ -1,35 +1,86 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f7f9;
+  --foreground: #11131a;
+
+  /* Brand */
+  --brand: #4f46e5;
+  --brand-d: #4338ca;
+  --brand-soft: #eef2ff;
+  --brand-ring: #c7d2fe;
+
+  /* Sidebar (dark theme) */
+  --nav-bg: #0d0e17;
+  --nav-fg: #eef0f6;
+  --nav-dim: #888da3;
+  --nav-active: rgba(255,255,255,0.07);
+  --nav-border: rgba(255,255,255,0.07);
+
+  /* Risk semantics */
+  --risk-critical: #dc2626;
+  --risk-critical-bg: #fef2f2;
+  --risk-critical-border: #fbd5d5;
+  --risk-high: #ea580c;
+  --risk-high-fg: #c2410c;
+  --risk-high-bg: #fff7ed;
+  --risk-high-border: #fcdcc0;
+  --risk-medium: #d97706;
+  --risk-medium-fg: #b45309;
+  --risk-medium-bg: #fffbeb;
+  --risk-medium-border: #fbe6bd;
+  --risk-low: #16a34a;
+  --risk-low-fg: #15803d;
+  --risk-low-bg: #f0fdf4;
+  --risk-low-border: #c4ebcf;
+
+  /* Neutrals */
+  --ink: #11131a;
+  --body: #3b4150;
+  --muted: #6b7180;
+  --dim: #9aa0ad;
+  --line: #ebedf2;
+  --wash: #f6f7f9;
+  --surface: #ffffff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-brand: var(--brand);
+  --color-brand-d: var(--brand-d);
+  --color-brand-soft: var(--brand-soft);
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
+  background: var(--wash);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Smooth scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
+  background: #d4d7df;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #bcc0cb;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Animations */
+@keyframes rlcIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }

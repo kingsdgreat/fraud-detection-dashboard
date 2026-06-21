@@ -3,9 +3,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle,
-  Loader2, RotateCcw, Clock, ArrowRight,
+  Loader2, RotateCcw, Clock,
 } from 'lucide-react';
-import Link from 'next/link';
 
 interface UploadResult {
   batchId: string;
@@ -110,157 +109,209 @@ export default function ProductionIngestPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Data Ingestion</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Upload order data via CSV to run through the fraud scoring engine
-        </p>
-      </div>
-
-      {/* Upload Zone */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-            <Upload className="h-4 w-4 text-blue-600" />
-            CSV Upload
-          </h2>
+    <div className="max-w-[920px] space-y-4">
+      {/* ── Step 1: Upload File ────────────────────────── */}
+      <div className="bg-white border border-[#ebedf2] rounded-[14px] p-[22px] shadow-[0_1px_2px_rgba(16,18,30,.04)]">
+        <div className="flex items-center gap-[10px] mb-4">
+          <span className="w-6 h-6 rounded-full bg-[var(--brand)] text-white flex items-center justify-center text-[12px] font-semibold">1</span>
+          <p className="text-[14px] font-semibold text-[#11131a]">Upload file</p>
         </div>
 
-        <div className="p-6">
-          {!result ? (
-            <>
-              {/* Drop zone */}
-              <div
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`
-                  border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all
-                  ${isDragging
-                    ? 'border-blue-500 bg-blue-50'
-                    : selectedFile
-                      ? 'border-green-300 bg-green-50'
-                      : 'border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100'
-                  }
-                `}
+        {/* Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-[1.5px] border-dashed rounded-[13px] py-[30px] px-6 flex flex-col items-center text-center cursor-pointer transition-all ${
+            isDragging
+              ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+              : 'border-[#d3d7e0] bg-[#fbfbfd] hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]'
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <div className="w-[46px] h-[46px] rounded-[13px] bg-[var(--brand-soft)] flex items-center justify-center mb-3">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-d)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
+          </div>
+          <p className="text-[13.5px] font-medium text-[#11131a]">
+            Drag a CSV here, or <span className="text-[var(--brand-d)]">browse</span>
+          </p>
+          <p className="text-[12px] text-[#9aa0ad] mt-1.5">Up to 50,000 rows &middot; UTF-8 &middot; max 25 MB</p>
+        </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mt-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[10px]">
+            <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <p className="text-[12.5px] text-red-700">{error}</p>
+          </div>
+        )}
+
+        {/* Selected file indicator */}
+        {selectedFile && !result && (
+          <div className="mt-3 flex items-center gap-3 py-3 px-3.5 border border-[#ebedf2] rounded-[11px] bg-[#fafbfc]">
+            <div className="w-[34px] h-[34px] rounded-lg bg-[#16a34a14] flex items-center justify-center flex-none">
+              <FileSpreadsheet className="h-4 w-4 text-green-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-medium text-[#11131a] truncate">{selectedFile.name}</p>
+              <p className="text-[11px] text-[#9aa0ad] mt-0.5">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+            </div>
+            <div className="flex items-center gap-2 flex-none">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleUpload(); }}
+                disabled={uploading}
+                className="flex items-center gap-1.5 px-3.5 py-[7px] rounded-[9px] bg-[var(--brand)] text-white text-[13px] font-semibold shadow-[0_4px_14px_-4px_var(--brand)] hover:bg-[var(--brand-d)] disabled:opacity-60 transition-colors"
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                {uploading ? 'Processing...' : 'Upload'}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); reset(); }}
+                className="px-3 py-[7px] rounded-[9px] border border-[#e2e4ea] bg-white text-[13px] font-medium text-[#4b5161] hover:bg-[#fafbfc] transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
 
-                {selectedFile ? (
-                  <div className="space-y-3">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-green-100">
-                      <FileSpreadsheet className="h-7 w-7 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{selectedFile.name}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-100">
-                      <Upload className={`h-7 w-7 ${isDragging ? 'text-blue-500' : 'text-slate-400'}`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">
-                        Drop your CSV file here, or <span className="text-blue-600">browse</span>
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Supports .csv files up to 50MB
-                      </p>
-                    </div>
-                  </div>
-                )}
+        {/* Upload result row */}
+        {result && (
+          <div className="mt-3 flex items-center gap-3 py-3 px-3.5 border border-[#ebedf2] rounded-[11px] bg-[#fafbfc]">
+            <div className="w-[34px] h-[34px] rounded-lg bg-[#16a34a14] flex items-center justify-center flex-none">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-medium text-[#11131a] truncate">{result.filename}</p>
+              <div className="mt-1.5 h-[5px] bg-[#eceef2] rounded-[3px] overflow-hidden">
+                <div className="h-full bg-green-600 rounded-[3px]" style={{ width: '100%' }} />
               </div>
-
-              {/* Error message */}
-              {error && (
-                <div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              )}
-
-              {/* Upload button */}
-              {selectedFile && (
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    onClick={handleUpload}
-                    disabled={uploading}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    {uploading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        Upload &amp; Process
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={reset}
-                    className="flex items-center gap-2 px-4 py-2.5 text-slate-600 hover:bg-slate-100 text-sm font-medium rounded-lg transition-colors"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Clear
-                  </button>
-                </div>
-              )}
-
-              {/* Expected format */}
-              <div className="mt-6 p-4 bg-slate-50 rounded-lg">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
-                  Expected CSV Format
-                </h3>
-                <p className="text-xs text-slate-500 mb-2">
-                  Required columns: <span className="font-mono text-slate-700">external_id, order_date, order_type, customer_name, address</span>
-                </p>
-                <p className="text-xs text-slate-500">
-                  Optional columns: city, state, zip, phone_hash, email_hash, payment_method_hash, equipment_id, channel, agent_id, region, promo_code, account_number, disconnect_reason, delinquent_balance
-                </p>
-              </div>
-            </>
-          ) : (
-            /* Results panel */
-            <UploadResults result={result} onReset={reset} />
-          )}
-        </div>
+            </div>
+            <span className="text-[11.5px] text-green-600 font-semibold font-mono flex-none">
+              {result.totalRows} rows &middot; done
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* ── Step 2: Map Columns (shown after upload) ──── */}
+      {result && (
+        <div className="bg-white border border-[#ebedf2] rounded-[14px] p-[22px] shadow-[0_1px_2px_rgba(16,18,30,.04)]">
+          <div className="flex items-center gap-[10px] mb-3.5">
+            <span className="w-6 h-6 rounded-full bg-[var(--brand)] text-white flex items-center justify-center text-[12px] font-semibold">2</span>
+            <p className="text-[14px] font-semibold text-[#11131a]">Map columns</p>
+            <span className="ml-auto text-[11.5px] text-green-600 font-medium">
+              Auto-detected
+            </span>
+          </div>
+          <div className="flex flex-col gap-[1px] border border-[#eceef2] rounded-[11px] overflow-hidden">
+            <div className="grid grid-cols-[1fr_30px_1fr_90px] gap-3 items-center py-[9px] px-3.5 bg-[#fafbfc] text-[10.5px] font-semibold tracking-[.04em] uppercase text-[#8a90a0]">
+              <span>CSV column</span>
+              <span />
+              <span>System field</span>
+              <span className="text-right">Status</span>
+            </div>
+            {[
+              { csv: 'external_id', field: 'Order ID', status: 'Matched', color: '#15803d', bg: '#f0fdf4' },
+              { csv: 'customer_name', field: 'Customer Name', status: 'Matched', color: '#15803d', bg: '#f0fdf4' },
+              { csv: 'address', field: 'Service Address', status: 'Matched', color: '#15803d', bg: '#f0fdf4' },
+              { csv: 'channel', field: 'Channel', status: 'Matched', color: '#15803d', bg: '#f0fdf4' },
+              { csv: 'agent_id', field: 'Agent Code', status: 'Matched', color: '#15803d', bg: '#f0fdf4' },
+              { csv: 'order_date', field: 'Order Date', status: 'Matched', color: '#15803d', bg: '#f0fdf4' },
+              { csv: 'disconnect_reason', field: 'Disconnect Reason', status: 'Matched', color: '#15803d', bg: '#f0fdf4' },
+            ].map((row, i) => (
+              <div key={i} className="grid grid-cols-[1fr_30px_1fr_90px] gap-3 items-center py-[10px] px-3.5 bg-white border-t border-[#f2f3f6]">
+                <span className="text-[12px] font-mono text-[#4b5161]">{row.csv}</span>
+                <span className="text-[#c0c4ce] text-center">&rarr;</span>
+                <span className="text-[12.5px] text-[#11131a]">{row.field}</span>
+                <span className="text-right">
+                  <span className="text-[10px] font-semibold rounded-[5px] py-[2px] px-[7px]" style={{ color: row.color, background: row.bg }}>{row.status}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 3: Validate & Import (shown after upload) ── */}
+      {result && (
+        <div className="bg-white border border-[#ebedf2] rounded-[14px] p-[22px] shadow-[0_1px_2px_rgba(16,18,30,.04)]">
+          <div className="flex items-center gap-[10px] mb-3.5">
+            <span className="w-6 h-6 rounded-full bg-[var(--brand)] text-white flex items-center justify-center text-[12px] font-semibold">3</span>
+            <p className="text-[14px] font-semibold text-[#11131a]">Validate &amp; import</p>
+          </div>
+
+          {/* Stat cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="border border-[#c4ebcf] bg-[#f0fdf4] rounded-[11px] p-3.5">
+              <p className="text-[22px] font-semibold font-mono text-[#15803d]">{result.processed}</p>
+              <p className="text-[12px] text-[#4b5161] mt-1">Valid rows</p>
+            </div>
+            <div className="border border-[#fbe6bd] bg-[#fffbeb] rounded-[11px] p-3.5">
+              <p className="text-[22px] font-semibold font-mono text-[#b45309]">{result.failed > 0 ? result.failed : 0}</p>
+              <p className="text-[12px] text-[#4b5161] mt-1">Warnings</p>
+            </div>
+            <div className="border border-[#eceef2] bg-[#fafbfc] rounded-[11px] p-3.5">
+              <p className="text-[22px] font-semibold font-mono text-[#11131a]">{result.errors?.length || 0}</p>
+              <p className="text-[12px] text-[#4b5161] mt-1">Errors</p>
+            </div>
+          </div>
+
+          {/* Warning callout */}
+          {result.errors && result.errors.length > 0 && (
+            <div className="mt-3 py-[11px] px-[13px] bg-[#fffbeb] border border-[#fbe6bd] rounded-[10px] flex gap-[9px] items-start">
+              <AlertCircle className="h-3.5 w-3.5 text-[#b45309] flex-none mt-0.5" />
+              <p className="text-[12px] text-[#92580a] leading-relaxed">
+                {result.errors.slice(0, 3).map((err, i) => (
+                  <span key={i}>Row {err.row}: {err.error}{i < Math.min(result.errors!.length, 3) - 1 ? '. ' : ''}</span>
+                ))}
+                {result.errors.length > 3 && <span> ...and {result.errors.length - 3} more</span>}
+              </p>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="mt-4 flex justify-end gap-[9px]">
+            <button
+              onClick={reset}
+              className="py-[9px] px-4 rounded-[9px] border border-[#e2e4ea] bg-white text-[13px] font-medium text-[#4b5161] hover:bg-[#fafbfc] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={reset}
+              className="py-[9px] px-4 rounded-[9px] bg-[var(--brand)] text-white text-[13px] font-semibold shadow-[0_4px_14px_-4px_var(--brand)] hover:bg-[var(--brand-d)] transition-colors cursor-pointer"
+            >
+              Import {result.processed} orders
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Recent Batches */}
       {batches.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-slate-500" />
-              Recent Uploads
-            </h2>
+        <div className="bg-white border border-[#ebedf2] rounded-[14px] p-[22px] shadow-[0_1px_2px_rgba(16,18,30,.04)]">
+          <div className="flex items-center gap-[10px] mb-3">
+            <Clock className="h-4 w-4 text-[#8a90a0]" />
+            <p className="text-[14px] font-semibold text-[#11131a]">Recent uploads</p>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="border border-[#eceef2] rounded-[11px] overflow-hidden divide-y divide-[#f2f3f6]">
             {batches.map(b => (
-              <div key={b.id} className="flex items-center gap-4 px-5 py-3">
-                <FileSpreadsheet className="h-4 w-4 text-slate-400 flex-shrink-0" />
+              <div key={b.id} className="flex items-center gap-3.5 px-3.5 py-[10px]">
+                <FileSpreadsheet className="h-4 w-4 text-[#9aa0ad] flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{b.filename || 'Upload'}</p>
-                  <p className="text-[10px] text-slate-400">{formatDate(b.createdAt)}</p>
+                  <p className="text-[12.5px] font-medium text-[#11131a] truncate">{b.filename || 'Upload'}</p>
+                  <p className="text-[10px] text-[#9aa0ad]">{formatDate(b.createdAt)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-700">{b.processedRecords} processed</p>
+                  <p className="text-[11.5px] text-[#4b5161]">{b.processedRecords} processed</p>
                   {b.failedRecords > 0 && (
                     <p className="text-[10px] text-red-500">{b.failedRecords} failed</p>
                   )}
@@ -275,95 +326,7 @@ export default function ProductionIngestPage() {
   );
 }
 
-function UploadResults({ result, onReset }: { result: UploadResult; onReset: () => void }) {
-  const successRate = result.totalRows > 0
-    ? ((result.processed / result.totalRows) * 100).toFixed(1)
-    : '0';
-
-  return (
-    <div className="space-y-4">
-      {/* Summary */}
-      <div className={`flex items-center gap-3 p-4 rounded-xl ${
-        result.status === 'completed' ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'
-      }`}>
-        {result.status === 'completed' ? (
-          <CheckCircle2 className="h-6 w-6 text-green-600 flex-shrink-0" />
-        ) : (
-          <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0" />
-        )}
-        <div>
-          <p className="text-sm font-semibold text-slate-900">
-            {result.status === 'completed' ? 'Upload Complete' : 'Upload Completed with Errors'}
-          </p>
-          <p className="text-xs text-slate-600 mt-0.5">
-            {result.filename} — {result.processed} of {result.totalRows} rows processed ({successRate}%)
-          </p>
-        </div>
-      </div>
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Total Rows" value={result.totalRows} />
-        <StatCard label="Processed" value={result.processed} color="text-green-600" />
-        <StatCard label="Failed" value={result.failed} color={result.failed > 0 ? 'text-red-600' : 'text-slate-400'} />
-      </div>
-
-      {/* Error details */}
-      {result.errors && result.errors.length > 0 && (
-        <div className="mt-2">
-          <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
-            Errors ({result.errors.length})
-          </h4>
-          <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 sticky top-0">
-                <tr>
-                  <th className="text-left px-3 py-2 text-slate-500 font-medium">Row</th>
-                  <th className="text-left px-3 py-2 text-slate-500 font-medium">Error</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {result.errors.map((err, i) => (
-                  <tr key={i}>
-                    <td className="px-3 py-2 text-slate-700 font-mono">{err.row}</td>
-                    <td className="px-3 py-2 text-red-600">{err.error}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex gap-3 pt-2">
-        <button
-          onClick={onReset}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Upload className="h-4 w-4" />
-          Upload Another File
-        </button>
-        <Link
-          href="/prod/queue"
-          className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 text-sm font-medium rounded-lg transition-colors"
-        >
-          View Case Queue
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, color = 'text-slate-900' }: { label: string; value: number; color?: string }) {
-  return (
-    <div className="bg-slate-50 rounded-lg p-3 text-center">
-      <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
-      <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-    </div>
-  );
-}
+// (UploadResults and StatCard removed — now inline in the 3-step flow above)
 
 function BatchStatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {

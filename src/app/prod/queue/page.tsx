@@ -1,12 +1,26 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  ListChecks, Filter, ArrowRight, Clock, User, AlertCircle,
-  ChevronLeft, ChevronRight, RefreshCw, Search,
+  Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, RefreshCw,
 } from 'lucide-react';
 
+/* ── Risk color maps ──────────────────────────────────────────── */
+const RISK_COLORS: Record<string, { fg: string; bg: string; bar: string }> = {
+  Critical: { fg: '#dc2626', bg: '#fef2f2', bar: '#dc2626' },
+  critical: { fg: '#dc2626', bg: '#fef2f2', bar: '#dc2626' },
+  High:     { fg: '#c2410c', bg: '#fff7ed', bar: '#ea580c' },
+  high:     { fg: '#c2410c', bg: '#fff7ed', bar: '#ea580c' },
+  Medium:   { fg: '#b45309', bg: '#fffbeb', bar: '#d97706' },
+  medium:   { fg: '#b45309', bg: '#fffbeb', bar: '#d97706' },
+  Low:      { fg: '#15803d', bg: '#f0fdf4', bar: '#16a34a' },
+  low:      { fg: '#15803d', bg: '#f0fdf4', bar: '#16a34a' },
+};
+
+const bandLabel = (b: string) => b.charAt(0).toUpperCase() + b.slice(1).toLowerCase();
+
+/* ── Types ────────────────────────────────────────────────────── */
 interface CaseRow {
   id: string;
   caseNumber: number;
@@ -24,7 +38,12 @@ interface CaseRow {
   state: string;
   region: string;
   channel: string;
+  agentCode?: string;
+  companyName?: string;
   assigneeName: string | null;
+  daysSinceDisconnect?: number | null;
+  commissionAmount?: number | null;
+  archetype?: string;
 }
 
 interface Pagination {
@@ -34,21 +53,45 @@ interface Pagination {
   totalPages: number;
 }
 
+interface BandCounts {
+  all: number;
+  Critical: number;
+  High: number;
+  Medium: number;
+  Low: number;
+  [key: string]: number;
+}
+
+/* ── Sort indicator ──────────────────────────────────────────── */
+function SortIndicator({ active, direction }: { active: boolean; direction: 'asc' | 'desc' | null }) {
+  return (
+    <span className="inline-flex flex-col ml-0.5 -my-1 text-[#b0b4be]">
+      <ChevronUp className={`h-2.5 w-2.5 ${active && direction === 'asc' ? 'text-[var(--brand)]' : ''}`} />
+      <ChevronDown className={`h-2.5 w-2.5 -mt-0.5 ${active && direction === 'desc' ? 'text-[var(--brand)]' : ''}`} />
+    </span>
+  );
+}
+
+/* ── Main component ──────────────────────────────────────────── */
 export default function ProductionQueuePage() {
+  const router = useRouter();
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, pageSize: 20, totalPages: 0 });
   const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState('');
+  // Filters & search
   const [riskFilter, setRiskFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
+
+  // Sorting
+  const [sortField, setSortField] = useState<'score' | 'band' | 'dc'>('score');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const fetchCases = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: '20' });
-      if (statusFilter) params.set('status', statusFilter);
       if (riskFilter) params.set('riskBand', riskFilter);
 
       const res = await fetch(`/api/v1/cases?${params}`);
@@ -60,258 +103,311 @@ export default function ProductionQueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, riskFilter]);
+  }, [page, riskFilter]);
 
   useEffect(() => { fetchCases(); }, [fetchCases]);
+  useEffect(() => { setPage(1); }, [riskFilter]);
 
-  // Reset page when filters change
-  useEffect(() => { setPage(1); }, [statusFilter, riskFilter]);
+  /* Band counts */
+  const bandCounts: BandCounts = useMemo(() => {
+    const counts: BandCounts = { all: cases.length, Critical: 0, High: 0, Medium: 0, Low: 0 };
+    cases.forEach(c => {
+      const key = bandLabel(c.riskBand);
+      if (key in counts) counts[key]++;
+    });
+    return counts;
+  }, [cases]);
+
+  /* Sort toggle */
+  const toggleSort = (field: 'score' | 'band' | 'dc') => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
+  };
+
+  /* Client-side filter + sort (on top of server-side risk filter) */
+  const displayCases = useMemo(() => {
+    let list = [...cases];
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(c =>
+        [c.customerName, c.address, c.city, c.state, c.agentCode, c.companyName, String(c.caseNumber)]
+          .some(v => v?.toLowerCase().includes(q))
+      );
+    }
+
+    // Sort
+    const bandOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+    const dir = sortDir === 'desc' ? -1 : 1;
+    list.sort((a, b) => {
+      if (sortField === 'band') return ((bandOrder[a.riskBand.toLowerCase()] || 0) - (bandOrder[b.riskBand.toLowerCase()] || 0)) * dir;
+      if (sortField === 'dc') return ((a.daysSinceDisconnect || 0) - (b.daysSinceDisconnect || 0)) * dir;
+      return (a.riskScore - b.riskScore) * dir;
+    });
+
+    return list;
+  }, [cases, searchQuery, sortField, sortDir]);
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div>
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Case Queue</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-[#11131a]">Case Queue</h1>
+          <p className="text-[13px] text-[#8a90a0] mt-0.5">
             {pagination.total} total cases
           </p>
         </div>
         <button
           onClick={fetchCases}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 text-[13px] text-[#6b7180] hover:bg-[#f0f1f4] rounded-[9px] transition-colors"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3">
-        <Filter className="h-4 w-4 text-slate-400" />
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="text-sm bg-transparent border-none outline-none text-slate-700 cursor-pointer"
-        >
-          <option value="">All Statuses</option>
-          <option value="open">Open</option>
-          <option value="in_review">In Review</option>
-          <option value="escalated">Escalated</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
-        </select>
+      {/* ── Search + filter chips ─────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3 mb-[18px]">
+        <div className="relative flex-1 max-w-[340px] min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-[15px] w-[15px] text-[#9aa0ad] pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search orders, customers, agents…"
+            className="w-full py-[9px] pl-[35px] pr-3 border border-[#e2e4ea] rounded-[9px] text-[13px] bg-white text-[#11131a] outline-none placeholder:text-[#9aa0ad] focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brand-soft)] transition-shadow"
+          />
+        </div>
 
-        <div className="w-px h-5 bg-slate-200" />
-
-        <select
-          value={riskFilter}
-          onChange={e => setRiskFilter(e.target.value)}
-          className="text-sm bg-transparent border-none outline-none text-slate-700 cursor-pointer"
-        >
-          <option value="">All Risk Levels</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-
-        {(statusFilter || riskFilter) && (
-          <>
-            <div className="w-px h-5 bg-slate-200" />
-            <button
-              onClick={() => { setStatusFilter(''); setRiskFilter(''); }}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Clear filters
-            </button>
-          </>
-        )}
+        <div className="flex gap-[7px]">
+          {(['', 'critical', 'high', 'medium', 'low'] as const).map(band => {
+            const isActive = riskFilter === band;
+            const label = band === '' ? 'All' : bandLabel(band);
+            const countKey = band === '' ? 'all' : bandLabel(band);
+            const count = bandCounts[countKey] ?? 0;
+            return (
+              <button
+                key={band}
+                onClick={() => setRiskFilter(band)}
+                className={`inline-flex items-center gap-1.5 px-3 py-[6px] rounded-lg text-[12.5px] font-medium cursor-pointer transition-all duration-100 border whitespace-nowrap ${
+                  isActive
+                    ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
+                    : 'bg-white text-[#4b5161] border-[#e6e8ee] hover:border-[#d0d3db]'
+                }`}
+              >
+                {label}{' '}
+                <span className={`font-mono ${isActive ? 'opacity-80' : 'opacity-60'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      {/* ── Table card ────────────────────────────────────────── */}
+      <div className="bg-white border border-[#ebedf2] rounded-[14px] overflow-hidden shadow-[0_1px_2px_rgba(16,18,30,0.04)]">
         {loading ? (
-          <div className="flex items-center justify-center py-20 text-slate-400">
-            <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+          <div className="flex items-center justify-center py-20 text-[#9098a6]">
+            <div className="animate-spin h-6 w-6 border-2 border-[var(--brand)] border-t-transparent rounded-full" />
           </div>
-        ) : cases.length === 0 ? (
+        ) : displayCases.length === 0 ? (
           <div className="text-center py-20">
-            <ListChecks className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">No cases match your filters</p>
+            <p className="text-[13px] text-[#9098a6]">No cases match your search or filters</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Risk</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Case</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Customer</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Assignee</th>
-                <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">SLA</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {cases.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-4 py-3">
-                    <RiskBadge band={c.riskBand} score={c.riskScore} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/prod/cases/${c.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">
-                      #{c.caseNumber}
-                    </Link>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{formatDate(c.createdAt)}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-sm text-slate-900 font-medium truncate max-w-[200px]">{c.customerName}</p>
-                    <p className="text-[10px] text-slate-400 truncate max-w-[200px]">
-                      {c.address}{c.city ? `, ${c.city}` : ''}{c.state ? ` ${c.state}` : ''}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={c.status} />
-                    {c.priority === 'urgent' && (
-                      <span className="ml-1.5 text-[9px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full font-bold uppercase">
-                        Urgent
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.assigneeName ? (
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                          <User className="h-2.5 w-2.5 text-blue-600" />
-                        </div>
-                        <span className="text-xs text-slate-700">{c.assigneeName}</span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400 italic">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <SLABadge dueAt={c.slaDueAt} status={c.status} />
-                  </td>
-                  <td className="px-4 py-2">
-                    <Link href={`/prod/cases/${c.id}`}>
-                      <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                    </Link>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+              <thead>
+                <tr className="bg-[#fafbfc] border-b border-[#ebedf2]">
+                  <th className="w-1 px-0 pl-[18px] py-[11px]"></th>
+                  <th className="px-[14px] py-[11px] text-left text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#8a90a0]">
+                    Order ID
+                  </th>
+                  <th
+                    className="px-[14px] py-[11px] text-left text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#8a90a0] cursor-pointer select-none hover:text-[#5a6070]"
+                    onClick={() => toggleSort('score')}
+                  >
+                    <span className="inline-flex items-center gap-[3px]">
+                      Score <SortIndicator active={sortField === 'score'} direction={sortField === 'score' ? sortDir : null} />
+                    </span>
+                  </th>
+                  <th className="px-[14px] py-[11px] text-left text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#8a90a0]">
+                    Customer · Pattern
+                  </th>
+                  <th className="px-[14px] py-[11px] text-left text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#8a90a0]">
+                    Agent · Agency
+                  </th>
+                  <th
+                    className="px-[14px] py-[11px] text-left text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#8a90a0] cursor-pointer select-none hover:text-[#5a6070]"
+                    onClick={() => toggleSort('band')}
+                  >
+                    <span className="inline-flex items-center gap-[3px]">
+                      Risk <SortIndicator active={sortField === 'band'} direction={sortField === 'band' ? sortDir : null} />
+                    </span>
+                  </th>
+                  <th
+                    className="px-[14px] py-[11px] text-left text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#8a90a0] cursor-pointer select-none hover:text-[#5a6070]"
+                    onClick={() => toggleSort('dc')}
+                  >
+                    <span className="inline-flex items-center gap-[3px]">
+                      Days DC <SortIndicator active={sortField === 'dc'} direction={sortField === 'dc' ? sortDir : null} />
+                    </span>
+                  </th>
+                  <th className="px-[14px] py-[11px] text-right text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#8a90a0]">
+                    Comm.
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {displayCases.map(c => {
+                  const colors = RISK_COLORS[c.riskBand] || RISK_COLORS.low;
+                  const band = bandLabel(c.riskBand);
+                  const dc = c.daysSinceDisconnect;
+                  const dcUrgent = dc != null && dc <= 7;
+                  const dcWarn = dc != null && dc > 7 && dc <= 14;
 
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50">
-            <p className="text-xs text-slate-500">
-              Showing {((page - 1) * pagination.pageSize) + 1}–{Math.min(page * pagination.pageSize, pagination.total)} of {pagination.total}
-            </p>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="p-1.5 rounded-lg hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="text-xs text-slate-600 px-2">
-                Page {page} of {pagination.totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-                disabled={page >= pagination.totalPages}
-                className="p-1.5 rounded-lg hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+                  return (
+                    <tr
+                      key={c.id}
+                      onClick={() => router.push(`/prod/cases/${c.id}`)}
+                      className="border-b border-[#f2f3f6] cursor-pointer transition-colors duration-100 hover:bg-[#fafbfd]"
+                    >
+                      {/* Risk bar */}
+                      <td className="pl-[18px] pr-0 py-[var(--row-py,12px)]">
+                        <span
+                          className="block w-[5px] h-[34px] rounded-[3px]"
+                          style={{ background: colors.bar }}
+                        />
+                      </td>
+
+                      {/* Order ID / Case # */}
+                      <td className="px-[14px] py-[var(--row-py,12px)]">
+                        <span className="text-[12.5px] font-mono font-medium text-[var(--brand-d)]">
+                          #{c.caseNumber}
+                        </span>
+                      </td>
+
+                      {/* Score badge */}
+                      <td className="px-[14px] py-[var(--row-py,12px)]">
+                        <span
+                          className="inline-flex items-center justify-center min-w-[38px] h-[25px] rounded-[7px] text-[13px] font-semibold font-mono"
+                          style={{ background: colors.bg, color: colors.fg }}
+                        >
+                          {c.riskScore}
+                        </span>
+                      </td>
+
+                      {/* Customer + Pattern */}
+                      <td className="px-[14px] py-[var(--row-py,12px)] max-w-[250px]">
+                        <span className="block min-w-0">
+                          <span className="block text-[13px] font-medium text-[#11131a] truncate">
+                            {c.customerName}
+                          </span>
+                          <span className="block text-[11.5px] text-[#9098a6] truncate">
+                            {c.archetype ? `${c.archetype} · ` : ''}
+                            {[c.address, c.city, c.state].filter(Boolean).join(', ')}
+                          </span>
+                        </span>
+                      </td>
+
+                      {/* Agent + Agency */}
+                      <td className="px-[14px] py-[var(--row-py,12px)] max-w-[200px]">
+                        <span className="block min-w-0">
+                          <span className="block text-[12px] font-mono text-[#3b4150] truncate">
+                            {c.agentCode || '—'}
+                          </span>
+                          <span className="block text-[11px] text-[#9098a6] truncate">
+                            {c.companyName || '—'}
+                          </span>
+                        </span>
+                      </td>
+
+                      {/* Risk dot + label */}
+                      <td className="px-[14px] py-[var(--row-py,12px)]">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="w-[7px] h-[7px] rounded-full"
+                            style={{ background: colors.bar }}
+                          />
+                          <span className="text-[12.5px] font-medium" style={{ color: colors.fg }}>
+                            {band}
+                          </span>
+                        </span>
+                      </td>
+
+                      {/* Days DC */}
+                      <td className="px-[14px] py-[var(--row-py,12px)]">
+                        {dc != null ? (
+                          <span
+                            className="text-[12.5px] font-mono"
+                            style={{
+                              color: dcUrgent ? '#dc2626' : dcWarn ? '#c2410c' : '#8b90a0',
+                              fontWeight: dcUrgent ? 600 : 500,
+                            }}
+                          >
+                            {dc}d
+                          </span>
+                        ) : (
+                          <span className="text-[#9098a6]">&mdash;</span>
+                        )}
+                      </td>
+
+                      {/* Commission */}
+                      <td className="px-[14px] py-[var(--row-py,12px)] text-right">
+                        <span className="text-[12.5px] font-mono text-[#11131a]">
+                          {c.commissionAmount && c.commissionAmount > 0
+                            ? `$${c.commissionAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                            : '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
+
+        {/* Footer / pagination */}
+        <div className="flex items-center justify-between px-[18px] py-[13px] text-[12px] text-[#8a90a0] border-t border-[#f2f3f6]">
+          <span>
+            Showing{' '}
+            <span className="font-mono text-[#4b5161]">
+              {displayCases.length === 0
+                ? 0
+                : ((page - 1) * pagination.pageSize) + 1}
+              &ndash;
+              {Math.min(page * pagination.pageSize, pagination.total)}
+            </span>{' '}
+            of {pagination.total} cases
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-[10px] py-[5px] border border-[#e6e8ee] rounded-[7px] bg-white text-[12px] disabled:text-[#c0c4ce] text-[#6b7180] hover:bg-[#f6f7f9] disabled:hover:bg-white transition-colors"
+            >
+              &larr;
+            </button>
+            <span className="text-[12px] px-1">
+              Page {page} of {pagination.totalPages || 1}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+              disabled={page >= pagination.totalPages}
+              className="px-[10px] py-[5px] border border-[#e6e8ee] rounded-[7px] bg-white text-[12px] disabled:text-[#c0c4ce] text-[#6b7180] hover:bg-[#f6f7f9] disabled:hover:bg-white transition-colors"
+            >
+              &rarr;
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
-
-// ── Sub-components ──────────────────────────────────────────
-
-function RiskBadge({ band, score }: { band: string; score: number }) {
-  const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700 ring-red-200',
-    high: 'bg-orange-100 text-orange-700 ring-orange-200',
-    medium: 'bg-amber-100 text-amber-700 ring-amber-200',
-    low: 'bg-green-100 text-green-700 ring-green-200',
-  };
-  return (
-    <div className="flex flex-col items-center gap-0.5">
-      <span className={`inline-flex items-center justify-center w-10 py-1 rounded-lg text-xs font-bold ring-1 ${styles[band] || styles.low}`}>
-        {score}
-      </span>
-      <span className="text-[9px] text-slate-400 uppercase font-medium">{band}</span>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    open: 'bg-blue-50 text-blue-700 ring-blue-200',
-    in_review: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-    escalated: 'bg-amber-50 text-amber-700 ring-amber-200',
-    resolved: 'bg-green-50 text-green-700 ring-green-200',
-    dismissed: 'bg-slate-100 text-slate-500 ring-slate-200',
-  };
-  const labels: Record<string, string> = {
-    open: 'Open', in_review: 'In Review', escalated: 'Escalated',
-    resolved: 'Resolved', dismissed: 'Dismissed',
-  };
-  return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ${styles[status] || styles.open}`}>
-      {labels[status] || status}
-    </span>
-  );
-}
-
-function SLABadge({ dueAt, status }: { dueAt: string | null; status: string }) {
-  if (!dueAt || status === 'resolved' || status === 'dismissed') {
-    return <span className="text-[10px] text-slate-300">—</span>;
-  }
-
-  const due = new Date(dueAt);
-  const now = new Date();
-  const diffMs = due.getTime() - now.getTime();
-  const diffHours = Math.floor(diffMs / 3600000);
-
-  if (diffMs < 0) {
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-        <AlertCircle className="h-2.5 w-2.5" />
-        Overdue
-      </span>
-    );
-  }
-
-  if (diffHours < 4) {
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-        <Clock className="h-2.5 w-2.5" />
-        {diffHours}h left
-      </span>
-    );
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-      <Clock className="h-2.5 w-2.5" />
-      {diffHours}h
-    </span>
-  );
-}
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
